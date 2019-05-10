@@ -1,6 +1,7 @@
 
 add_subdirectory(protobuf)
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/protobuf")
+include_directories(SYSTEM ${EIGEN_INCLUDE_DIR})
 
 set(COMMON_SRC
     "Field_Dimensions.cpp"
@@ -13,9 +14,9 @@ set(COMMON_SRC
     "Geometry2d/Point.cpp"
     "Geometry2d/Polygon.cpp"
     "Geometry2d/Segment.cpp"
-    "multicast.cpp"
+        "multicast.cpp"
     "Utils.cpp"
-)
+        )
 
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})

@@ -17,10 +17,12 @@ void Path::draw(SystemState* const state, const QColor& color,
     Packet::DebugRobotPath* dbg = state->logFrame->add_debug_robot_paths();
     dbg->set_layer(state->findDebugLayer(layer));
 
-    auto addPoint = [dbg](MotionInstant instant) {
-        Packet::DebugRobotPath::DebugRobotPathPoint* pt = dbg->add_points();
-        *pt->mutable_pos() = instant.pos;
-        *pt->mutable_vel() = instant.vel;
+    auto addPoint = [dbg](boost::optional<RobotInstant> instant) {
+        if (instant) {
+            Packet::DebugRobotPath::DebugRobotPathPoint* pt = dbg->add_points();
+            *pt->mutable_pos() = instant->pose().position();
+            *pt->mutable_vel() = instant->velocity().linear();
+        }
     };
 
     // Get the closest step size to a desired value that is divisible into the
@@ -35,17 +37,17 @@ void Path::draw(SystemState* const state, const QColor& color,
     // Draw points along the path except the last one
     for (int i = 0; i < segmentCount; ++i) {
         RJ::Seconds t = i * step;
-        addPoint(evaluate(t)->motion);
+        addPoint(evaluate(t));
     }
 
     // Draw the last point of the path
-    addPoint(end().motion);
+    addPoint(end());
 }
 
 void Path::drawDebugText(SystemState* state, const QColor& color,
                          const QString& layer) const {
     if (_debugText) {
-        state->drawText(_debugText.get(), end().motion.pos, color, layer);
+        state->drawText(_debugText.get(), end().pose().position(), color, layer);
     }
 }
 
@@ -83,13 +85,13 @@ bool Path::pathsIntersect(const std::vector<DynamicObstacle>& obstacles,
             assert(it != nullptr);
             auto hitRadius = pair.second + Robot_Radius;
             auto robotInstant = (**it);
-            if (current.motion.pos.distTo(robotInstant.motion.pos) <
+            if (current.pose().position().distTo(robotInstant.pose().position()) <
                 hitRadius) {
                 if (hitTime) {
                     *hitTime = time;
                 }
                 if (hitLocation) {
-                    *hitLocation = std::move(robotInstant.motion.pos);
+                    *hitLocation = std::move(robotInstant.pose().position());
                 }
                 return true;
             }

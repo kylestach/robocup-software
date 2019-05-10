@@ -17,20 +17,14 @@ namespace Planning {
  */
 class InterpolatedPath : public Path {
 public:
-    /// Each entry in InterpolatedPath is a MotionInstant and the time that the
+    /// Each entry in InterpolatedPath is a RobotInstant and the time that the
     /// robot should be at that position and velocity.
     struct Entry {
-        Entry(MotionInstant inst, RJ::Seconds t) : instant(inst), time(t) {}
-
-        MotionInstant instant;
+        RobotInstant instant;
         RJ::Seconds time;
-        boost::optional<AngleInstant> angle;
 
-        Geometry2d::Point& pos() { return instant.pos; }
-        const Geometry2d::Point& pos() const { return instant.pos; }
-
-        Geometry2d::Point& vel() { return instant.vel; }
-        const Geometry2d::Point& vel() const { return instant.vel; }
+        const Geometry2d::Point& pos() const { return instant.pose().position(); }
+        Geometry2d::Point& pos() { return instant.pose().position(); }
     };
 
     // Set of points in the path - used as waypoints
@@ -40,18 +34,18 @@ public:
     InterpolatedPath() {}
 
     /** constructor with a single point */
-    InterpolatedPath(Geometry2d::Point p0);
+    InterpolatedPath(Geometry2d::Pose p0);
 
     /** constructor from two points */
-    InterpolatedPath(Geometry2d::Point p0, Geometry2d::Point p1);
+    InterpolatedPath(Geometry2d::Pose p0, Geometry2d::Pose p1);
 
     /// Adds an instant at the end of the path for the given time.
     /// Time should not bet less than the last time.
-    void addInstant(RJ::Seconds time, MotionInstant instant) {
+    void addInstant(RJ::Seconds time, RobotInstant instant) {
         if (!waypoints.empty()) {
             assert(time > waypoints.back().time);
         }
-        waypoints.push_back(Entry(instant, time));
+        waypoints.push_back({instant, time});
     }
 
     // Overridden Path Methods
@@ -118,7 +112,7 @@ public:
      */
     RJ::Seconds getTime(int index) const;
 
-    static std::unique_ptr<Path> emptyPath(Geometry2d::Point pos) {
+    static std::unique_ptr<Path> emptyPath(Geometry2d::Pose pos) {
         auto path = std::make_unique<InterpolatedPath>(pos);
         path->setDebugText("Empty Path");
         return std::move(path);

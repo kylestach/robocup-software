@@ -11,13 +11,13 @@ using namespace Geometry2d;
 
 namespace Planning {
 
-InterpolatedPath::InterpolatedPath(Point p0) {
-    waypoints.emplace_back(MotionInstant(p0, Point()), RJ::Seconds::zero());
+InterpolatedPath::InterpolatedPath(Pose p0) {
+    waypoints.emplace_back(RobotInstant(p0, Geometry2d::Twist::Zero()), RJ::Seconds::zero());
 }
 
-InterpolatedPath::InterpolatedPath(Point p0, Point p1) {
-    waypoints.emplace_back(MotionInstant(p0, Point()), 0ms);
-    waypoints.emplace_back(MotionInstant(p1, Point()), 0ms);
+InterpolatedPath::InterpolatedPath(Pose p0, Pose p1) {
+    waypoints.emplace_back(RobotInstant(p0, Geometry2d::Twist::Zero()), 0ms);
+    waypoints.emplace_back(RobotInstant(p1, Geometry2d::Twist::Zero()), 0ms);
 }
 
 float InterpolatedPath::length(unsigned int start) const {
@@ -189,68 +189,46 @@ void InterpolatedPath::draw(SystemState* const state,
     for (const Entry& entry : waypoints) {
         Packet::DebugRobotPath::DebugRobotPathPoint* pt = dbg->add_points();
         *pt->mutable_pos() = entry.pos();
-        *pt->mutable_vel() = entry.vel();
+        *pt->mutable_vel() = entry.instant.velocity().linear();
     }
 }
 
 boost::optional<RobotInstant> InterpolatedPath::eval(RJ::Seconds t) const {
-    if (t < RJ::Seconds::zero()) {
-        return RobotInstant(waypoints.front().instant);
-    }
-    //    if (t < RJ::Seconds::zero()) {
-    //        debugThrow(
-    //            invalid_argument("A time less than 0 was entered for time t.
-    //            t=" + to_string(t)));
-    //    }
-    /*
-    float linearPos;
-    float linearSpeed;
-    bool pathIsValid = TrapezoidalMotion(
-        length(),
-        maxSpeed,
-        maxAcceleration,
-        t,
-        startSpeed,
-        endSpeed,
-        linearPos,      //  these are set by reference since C++ can't return
-    multiple values
-        linearSpeed);   //
-
-    Point direction;
-    if(!getPoint(linearPos, targetPosOut, direction)) {
-        return false;
-    }
-
-    targetVelOut = direction * linearSpeed;
-    */
-    if (waypoints.size() == 0 || waypoints.size() == 1) {
+    if (waypoints.size() < 2 || t < waypoints[0].time) {
         return boost::none;
     }
+
     if (t < waypoints[0].time) {
         debugThrow(
             invalid_argument("The start time should not be less than zero"));
     }
 
-    int i = 0;
-    while (waypoints[i].time <= t) {
-        if (waypoints[i].time == t) {
-            return RobotInstant(waypoints[i].instant);
-        }
-        i++;
-        if (i == size()) {
-            return boost::none;
-        }
-    }
-    RJ::Seconds deltaT = (waypoints[i].time - waypoints[i - 1].time);
-    if (deltaT == RJ::Seconds::zero()) {
-        return RobotInstant(waypoints[i].instant);
-    }
-    float constant = (t - waypoints[i - 1].time) / deltaT;
+    // Do a binary search to find the waypoints on either side.
+    // Lower bound will find the first entry e such that e.time >= t, so it is the "end" of our segment.
+    auto segment_end = std::lower_bound(waypoints.begin(), waypoints.end(), t, [](const Entry& e, RJ::Seconds t) {
+        return e.time < t;
+    });
 
-    return RobotInstant(MotionInstant(waypoints[i - 1].pos() * (1 - constant) +
-                                          waypoints[i].pos() * (constant),
-                                      waypoints[i - 1].vel() * (1 - constant) +
-                                          waypoints[i].vel() * (constant)));
+    // Check if this is out of bounds.
+    if (segment_end == waypoints.end() || segment_end - 1 == waypoints.end()) {
+        return boost::none;
+    }
+
+    // Grab the two waypoints from the iterators.
+    Entry w1 = *segment_end, w0 = *(segment_end - 1);
+
+    RJ::Seconds deltaT = (w1.time - w0.time);
+    if (deltaT == RJ::Seconds::zero()) {
+        // dt is zero, so they should be the same. Return one arbitrarily.
+        return RobotInstant(w0.instant);
+    }
+
+    double constant = (t - w0.time) / deltaT;
+
+    return RobotInstant(
+            (1 - constant) * w0.instant.pose().vector() + constant * w1.instant.pose().vector(),
+            (1 - constant) * w0.instant.velocity().vector() + constant * w1.instant.velocity().vector()
+            );
 }
 
 size_t InterpolatedPath::size() const { return waypoints.size(); }
@@ -300,72 +278,67 @@ unique_ptr<Path> InterpolatedPath::subPath(RJ::Seconds startTime,
         return this->clone();
     }
 
-    endTime = std::min(endTime, getDuration());
+    // Do a binary search to find the first waypoint to include
+    auto waypoint_iter = std::lower_bound(waypoints.begin(), waypoints.end(), startTime,
+            [](const Entry& e, RJ::Seconds t) {
+                return e.time < t;
+            });
+
+    // This corresponds to the case where startTime >= duration, and should never be triggered.
+    assert(waypoint_iter != waypoints.end());
 
     auto subpath = make_unique<InterpolatedPath>();
+
+    // Check if we can include an interpolated waypoint.
+    if (startTime + RJ::Seconds(1e-9) < waypoint_iter->time) {
+        // This case should be avoided via checks and verifications above which limit the range to only valid amounts.
+        assert(waypoint_iter != waypoints.begin());
+
+        // Grab the previous waypoint.
+        Entry w0 = *(waypoint_iter - 1);
+        Entry w1 = *waypoint_iter;
+        RJ::Seconds dt = w1.time - w0.time;
+        if (dt > RJ::Seconds(0)) {
+            double constant = (startTime - w0.time) / dt;
+
+            RobotInstant first_instant(
+                    (1 - constant) * w0.instant.pose().vector() + constant * w1.instant.pose().vector(),
+                    (1 - constant) * w0.instant.velocity().vector() + constant * w1.instant.velocity().vector()
+            );
+            subpath->addInstant(RJ::Seconds(0), first_instant);
+        }
+    }
+
+    endTime = std::min(endTime, getDuration());
 
     subpath->setStartTime(this->startTime() + startTime);
 
     // Bound the endTime to a reasonable time.
     endTime = min(endTime, getDuration());
 
-    // Find the first point in the vector of points which will be included in
-    // the subPath
-    size_t start = 0;
-    while (waypoints[start].time <= startTime) {
-        start++;
-    }
-    start--;
-
-    // Add the first points to the InterpolatedPath
-    if (waypoints[start].time == startTime) {
-        subpath->waypoints.emplace_back(waypoints[start].instant,
-                                        RJ::Seconds::zero());
-    } else {
-        RJ::Seconds deltaT =
-            (waypoints[start + 1].time - waypoints[start].time);
-        float constant = (waypoints[start + 1].time - startTime) / deltaT;
-        Point startPos = waypoints[start + 1].pos() * (1 - constant) +
-                         waypoints[start].pos() * (constant);
-        Point vi = waypoints[start + 1].vel() * (1 - constant) +
-                   waypoints[start].vel() * (constant);
-
-        subpath->waypoints.emplace_back(MotionInstant(startPos, vi),
-                                        RJ::Seconds::zero());
+    while (waypoint_iter != waypoints.end() && waypoint_iter->time < endTime) {
+        subpath->addInstant(waypoint_iter->time - startTime, waypoint_iter->instant);
     }
 
-    // Find the last point in the InterpolatedPath
-    Point vf;
-    Point endPos;
-    size_t end;
-    if (endTime >= getDuration()) {
-        end = size() - 1;
-        vf = waypoints[end].vel();
-        endPos = waypoints[end].pos();
-    } else {
-        end = start + 1;
-        while (waypoints[end].time < endTime) {
-            end++;
+    // Handle the case where we need an interpolated waypoint after the last full segment.
+    if (waypoint_iter != waypoints.end()) {
+        // Assuming there are more than one waypoint in the original path, this iterator cannot be the first waypoint.
+        assert(waypoint_iter != waypoints.begin());
+
+        Entry w0 = *(waypoint_iter - 1);
+        Entry w1 = *waypoint_iter;
+
+        RJ::Seconds dt = w1.time - w0.time;
+        if (dt > RJ::Seconds(0)) {
+            double constant = (startTime - w0.time) / dt;
+
+            RobotInstant last_instant(
+                    (1 - constant) * w0.instant.pose().vector() + constant * w1.instant.pose().vector(),
+                    (1 - constant) * w0.instant.velocity().vector() + constant * w1.instant.velocity().vector()
+            );
+            subpath->addInstant(endTime - startTime, last_instant);
         }
-        RJ::Seconds deltaT = (waypoints[end].time - waypoints[end - 1].time);
-        float constant = (waypoints[end].time - endTime) / deltaT;
-        vf = waypoints[end].vel() * (1 - constant) +
-             waypoints[end - 1].vel() * (constant);
-        endPos = waypoints[end].pos() * (1 - constant) +
-                 waypoints[end - 1].pos() * constant;
     }
-
-    // Add all the points in the middle
-    size_t i = start + 1;
-    while (i < end) {
-        subpath->waypoints.emplace_back(waypoints[i].instant,
-                                        waypoints[i].time - startTime);
-        i++;
-    }
-
-    // Add the last point
-    subpath->waypoints.emplace_back(MotionInstant(endPos, vf),
-                                    endTime - startTime);
 
     debugThrowIf(
         to_string(subpath->getDuration()) +

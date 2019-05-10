@@ -60,10 +60,11 @@ public:
      * Velocity Profile.
      */
     static std::unique_ptr<Planning::InterpolatedPath> generatePath(
-        const std::vector<Geometry2d::Point>& points,
+        const std::vector<Geometry2d::Pose>& points,
         const Geometry2d::ShapeSet& obstacles,
-        const MotionConstraints& motionConstraints, Geometry2d::Point vi,
-        Geometry2d::Point vf);
+        const MotionConstraints& motionConstraints,
+        Geometry2d::Twist vi,
+        Geometry2d::Twist vf);
 
     // Overridden methods
 

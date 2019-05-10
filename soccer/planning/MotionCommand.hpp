@@ -48,18 +48,22 @@ struct PathTargetCommand : public MotionCommand {
     virtual std::unique_ptr<Planning::MotionCommand> clone() const override {
         return std::make_unique<PathTargetCommand>(*this);
     }
-    explicit PathTargetCommand(const MotionInstant& goal)
+    explicit PathTargetCommand(const RobotInstant& goal)
         : MotionCommand(MotionCommand::PathTarget), pathGoal(goal){};
-    const MotionInstant pathGoal;
+    explicit PathTargetCommand(const Geometry2d::Pose& goal)
+            : MotionCommand(MotionCommand::PathTarget), pathGoal(goal, Geometry2d::Twist::Zero()){};
+    const RobotInstant pathGoal;
 };
 
 struct WorldVelTargetCommand : public MotionCommand {
     explicit WorldVelTargetCommand(Geometry2d::Point vel)
-        : MotionCommand(MotionCommand::WorldVel), worldVel(vel){};
+        : MotionCommand(MotionCommand::WorldVel), worldVel(vel, 0){};
+    explicit WorldVelTargetCommand(Geometry2d::Twist vel)
+            : MotionCommand(MotionCommand::WorldVel), worldVel(vel){};
     virtual std::unique_ptr<Planning::MotionCommand> clone() const override {
         return std::make_unique<WorldVelTargetCommand>(*this);
     }
-    const Geometry2d::Point worldVel;
+    const Geometry2d::Twist worldVel;
 };
 struct PivotCommand : public MotionCommand {
     explicit PivotCommand(Geometry2d::Point pivotPoint,
@@ -82,18 +86,25 @@ struct DirectPathTargetCommand : public MotionCommand {
     virtual std::unique_ptr<Planning::MotionCommand> clone() const override {
         return std::make_unique<DirectPathTargetCommand>(*this);
     }
-    explicit DirectPathTargetCommand(const MotionInstant& goal)
+    explicit DirectPathTargetCommand(const RobotInstant& goal)
         : MotionCommand(MotionCommand::DirectPathTarget), pathGoal(goal){};
-    const MotionInstant pathGoal;
+    explicit DirectPathTargetCommand(const Geometry2d::Pose& goal)
+            : MotionCommand(MotionCommand::DirectPathTarget), pathGoal(goal, Geometry2d::Twist::Zero()) {};
+    explicit DirectPathTargetCommand(
+            const Geometry2d::Point& goal_position,
+            const Geometry2d::Point& goal_vel = Geometry2d::Point(0, 0))
+            : MotionCommand(MotionCommand::DirectPathTarget),
+              pathGoal(Geometry2d::Pose(goal_position, 0), Geometry2d::Twist(goal_vel, 0)) {};
+    const RobotInstant pathGoal;
 };
 
 struct TuningPathCommand : public MotionCommand {
     virtual std::unique_ptr<Planning::MotionCommand> clone() const override {
         return std::make_unique<TuningPathCommand>(*this);
     }
-    explicit TuningPathCommand(const MotionInstant& goal)
+    explicit TuningPathCommand(const RobotInstant& goal)
         : MotionCommand(MotionCommand::TuningPath), pathGoal(goal){};
-    const MotionInstant pathGoal;
+    const RobotInstant pathGoal;
 };
 
 struct LineKickCommand : public MotionCommand {

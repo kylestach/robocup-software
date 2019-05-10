@@ -80,7 +80,4 @@ private:
 /// file.
 std::unique_ptr<Planning::SingleRobotPathPlanner> PlannerForCommandType(
     Planning::MotionCommand::CommandType type);
-
-boost::optional<std::function<AngleInstant(MotionInstant)>>
-angleFunctionForCommandType(const Planning::RotationCommand& command);
 }  // namespace Planning

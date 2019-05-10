@@ -188,8 +188,7 @@ public:
      * Returns a const reference to the path of the robot.
      */
     const Planning::Path& path() {
-        // return *angleFunctionPath.path;
-        return angleFunctionPath;
+        return *_path;
     }
 
     /// clears old radioTx stuff, resets robot debug text, and clears local
@@ -477,7 +476,7 @@ protected:
     std::unique_ptr<Planning::RotationCommand> _rotationCommand;
     RobotConstraints _robotConstraints;
 
-    Planning::AngleFunctionPath angleFunctionPath;  /// latest path
+    std::unique_ptr<Planning::Path> _path;  /// latest path
 
     /**
      * Creates a set of obstacles from a given robot team mask,

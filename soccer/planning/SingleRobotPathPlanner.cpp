@@ -83,34 +83,6 @@ void SingleRobotPathPlanner::splitDynamic(
     }
 }
 
-boost::optional<std::function<AngleInstant(MotionInstant)>>
-angleFunctionForCommandType(const Planning::RotationCommand& command) {
-    switch (command.getCommandType()) {
-        case RotationCommand::FacePoint: {
-            Geometry2d::Point targetPt =
-                static_cast<const Planning::FacePointCommand&>(command)
-                    .targetPos;
-            std::function<AngleInstant(MotionInstant)> function =
-                [targetPt](MotionInstant instant) {
-                    return AngleInstant(instant.pos.angleTo(targetPt));
-                };
-            return function;
-        }
-        case RotationCommand::FaceAngle: {
-            float angle = static_cast<const Planning::FaceAngleCommand&>(
-                              command).targetAngle;
-            std::function<AngleInstant(MotionInstant)> function =
-                [angle](MotionInstant instant) { return AngleInstant(angle); };
-            return function;
-        }
-        case RotationCommand::None:
-            return boost::none;
-        default:
-            debugThrow("RotationCommand Not implemented");
-            return boost::none;
-    }
-}
-
 bool SingleRobotPathPlanner::shouldReplan(const PlanRequest& planRequest) {
     const auto currentInstant = planRequest.start;
     const MotionConstraints& motionConstraints = planRequest.constraints.mot;
@@ -132,12 +104,11 @@ bool SingleRobotPathPlanner::shouldReplan(const PlanRequest& planRequest) {
 
     boost::optional<RobotInstant> optTarget = prevPath->evaluate(timeIntoPath);
     // If we went off the end of the path, use the end for calculations.
-    MotionInstant target =
-        optTarget ? optTarget->motion : prevPath->end().motion;
+    RobotInstant target = optTarget ? *optTarget : prevPath->end();
 
     // invalidate path if current position is more than the replanThreshold away
     // from where it's supposed to be right now
-    float pathError = (target.pos - currentInstant.pos).mag();
+    float pathError = (target.pose().position() - currentInstant.pose().position()).mag();
     float replanThreshold = *motionConstraints._replan_threshold;
     if (*motionConstraints._replan_threshold != 0 &&
         pathError > replanThreshold) {
