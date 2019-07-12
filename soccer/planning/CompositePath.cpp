@@ -102,10 +102,10 @@ bool CompositePath::hit(const Geometry2d::ShapeSet& obstacles,
     return false;
 }
 
-void CompositePath::draw(SystemState* const state, const QColor& color,
-                         const QString& layer) const {
+void CompositePath::draw(DebugArtist* artist, const QColor& color,
+                         const std::string& layer) const {
     for (const std::unique_ptr<Path>& path : paths) {
-        path->draw(state, color, layer);
+        path->draw(artist, color, layer);
     }
 }
 

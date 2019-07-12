@@ -30,11 +30,11 @@ void SingleRobotPathPlanner::createConfiguration(Configuration* cfg) {
 }
 
 std::unique_ptr<SingleRobotPathPlanner> PlannerForCommandType(
-    MotionCommand::CommandType type) {
+    MotionCommand::CommandType type, Context context) {
     SingleRobotPathPlanner* planner = nullptr;
     switch (type) {
         case MotionCommand::PathTarget:
-            planner = new RRTPlanner(100, 250);
+            planner = new RRTPlanner(context, 100, 250);
             break;
         case MotionCommand::DirectPathTarget:
             planner = new DirectTargetPathPlanner();
@@ -46,17 +46,17 @@ std::unique_ptr<SingleRobotPathPlanner> PlannerForCommandType(
             planner = new PivotPathPlanner();
             break;
         case MotionCommand::WorldVel:
-            planner = new TargetVelPathPlanner();
+            planner = new TargetVelPathPlanner(context);
             break;
         case MotionCommand::LineKick:
-            planner = new LineKickPlanner();
+            planner = new LineKickPlanner(context);
             break;
         case MotionCommand::None:
-            planner = new EscapeObstaclesPathPlanner();
+            planner = new EscapeObstaclesPathPlanner(context);
             break;
         default:
             debugThrow("Command not implemented");
-            planner = new EscapeObstaclesPathPlanner();
+            planner = new EscapeObstaclesPathPlanner(context);
             break;
     }
 

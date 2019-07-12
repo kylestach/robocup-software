@@ -104,7 +104,7 @@ std::unique_ptr<Path> TargetVelPathPlanner::run(PlanRequest& planRequest) {
 
     // If the start point is in an obstacle, escape from it
     if (obstacles.hit(startInstant.pos)) {
-        EscapeObstaclesPathPlanner escapePlanner;
+        EscapeObstaclesPathPlanner escapePlanner(_context);
         EmptyCommand emptyCommand;
         return escapePlanner.run(planRequest);
     }

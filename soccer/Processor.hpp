@@ -15,7 +15,7 @@
 #include <Geometry2d/TransformMatrix.hpp>
 #include <Logger.hpp>
 #include <NewRefereeModule.hpp>
-#include <SystemState.hpp>
+#include <Context.hpp>
 #include "VisionReceiver.hpp"
 
 #include "rc-fshare/rtp.hpp"
@@ -157,6 +157,8 @@ public:
 
     SystemState* state() { return &_state; }
 
+    DebugArtist* artist() { return &_artist; }
+
     bool simulation() const { return _simulation; }
 
     void defendPlusX(bool value);
@@ -249,8 +251,15 @@ private:
     // SystemState, etc.
     QMutex _loopMutex;
 
+    /// Holder for system state. Must be initialized before _state and _artist
+    Context _context;
+
     /** global system state */
     SystemState _state;
+
+    DebugArtist _artist;
+
+    std::shared_ptr<Packet::LogFrame> _log_frame;
 
     // Transformation from world space to team space.
     // This depends on which goal we're defending.

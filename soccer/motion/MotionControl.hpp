@@ -2,6 +2,7 @@
 
 #include <Configuration.hpp>
 #include <Geometry2d/Point.hpp>
+#include <Context.hpp>
 #include <rc-fshare/pid.hpp>
 #include <time.hpp>
 
@@ -18,7 +19,7 @@ class OurRobot;
  */
 class MotionControl {
 public:
-    MotionControl(OurRobot* robot);
+    MotionControl(OurRobot* robot, Context context);
 
     /**
      * Stops the robot.
@@ -62,6 +63,9 @@ private:
     Pid _positionXController;
     Pid _positionYController;
     Pid _angleController;
+
+    /// Context, used for debug drawing
+    Context _context;
 
     static ConfigDouble* _max_acceleration;
     static ConfigDouble* _max_velocity;

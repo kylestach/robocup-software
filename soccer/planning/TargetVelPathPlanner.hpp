@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Geometry2d/Point.hpp>
+#include <Context.hpp>
 #include "SingleRobotPathPlanner.hpp"
 
 class Configuration;
@@ -12,7 +13,7 @@ namespace Planning {
 /// possible.  Avoids obstacles.
 class TargetVelPathPlanner : public SingleRobotPathPlanner {
 public:
-    TargetVelPathPlanner() : SingleRobotPathPlanner(false){};
+    TargetVelPathPlanner(Context context) : SingleRobotPathPlanner(false), _context(context) {};
 
     virtual std::unique_ptr<Path> run(PlanRequest& planRequest) override;
 
@@ -28,6 +29,8 @@ private:
     Geometry2d::Point calculateNonblockedPathEndpoint(
         Geometry2d::Point start, Geometry2d::Point dir,
         const Geometry2d::ShapeSet& obstacles) const;
+
+    Context _context;
 
     /// If the desired target velocity changes by this much, the path is
     /// replanned

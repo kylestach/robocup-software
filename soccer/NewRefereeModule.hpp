@@ -136,7 +136,7 @@ public:
  */
 class NewRefereeModule : public QThread {
 public:
-    NewRefereeModule(SystemState& state);
+    NewRefereeModule(Context state);
     ~NewRefereeModule();
 
     void stop();
@@ -213,7 +213,7 @@ protected:
 
     QMutex _mutex;
     std::vector<NewRefereePacket*> _packets;
-    SystemState& _state;
+    Context _context;
 
     NewRefereeModuleEnums::Command prev_command;
     NewRefereeModuleEnums::Stage prev_stage;

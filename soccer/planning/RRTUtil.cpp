@@ -29,7 +29,7 @@ void RRTConfig::createConfiguration(Configuration* cfg) {
 
 ConfigBool EnableExpensiveRRTDebugDrawing();
 
-void DrawRRT(const RRT::Tree<Point>& rrt, SystemState* state,
+void DrawRRT(const RRT::Tree<Point>& rrt, DebugArtist* artist,
              unsigned shellID) {
     // Draw each robot's rrts in a different color
     // Note: feel free to change these, they're completely arbitrary
@@ -40,15 +40,15 @@ void DrawRRT(const RRT::Tree<Point>& rrt, SystemState* state,
 
     for (auto& node : rrt.allNodes()) {
         if (node.parent()) {
-            state->drawLine(Segment(node.state(), node.parent()->state()),
-                            color, QString("RobotRRT%1").arg(shellID));
+            artist->drawLine(Segment(node.state(), node.parent()->state()),
+                            color, std::string("RobotRRT") + std::to_string(shellID));
         }
     }
 }
 
-void DrawBiRRT(const RRT::BiRRT<Point>& biRRT, SystemState* state,
+void DrawBiRRT(const RRT::BiRRT<Point>& biRRT, DebugArtist* artist,
                unsigned shellID) {
-    DrawRRT(biRRT.startTree(), state, shellID);
-    DrawRRT(biRRT.goalTree(), state, shellID);
+    DrawRRT(biRRT.startTree(), artist, shellID);
+    DrawRRT(biRRT.goalTree(), artist, shellID);
 }
 }

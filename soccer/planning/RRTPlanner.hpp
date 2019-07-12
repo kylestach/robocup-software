@@ -40,7 +40,7 @@ public:
     /**
      * Constructor taking in the max iterations the RRT planner should run
      */
-    RRTPlanner(int minIterations, int maxIterations);
+    RRTPlanner(Context context, int minIterations, int maxIterations);
 
     /**
      * gets the maximum number of iterations for the RRT algorithm
@@ -79,6 +79,8 @@ public:
 
 private:
     int reusePathTries = 0;
+
+    Context _context;
 
 protected:
     /// minimum and maximum number of rrt iterations to run

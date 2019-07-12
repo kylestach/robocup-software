@@ -57,6 +57,7 @@ set(ROBOCUP_LIB_SRC
     "SimFieldView.cpp"
     "StripChart.cpp"
     "SystemState.cpp"
+    "DebugArtist.cpp"
     "ui/StyleSheetManager.cpp"
     "VisionReceiver.cpp"
     "vision/ball/BallBounce.cpp"

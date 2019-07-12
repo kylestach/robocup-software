@@ -57,7 +57,11 @@ void Processor::createConfiguration(Configuration* cfg) {
 
 Processor::Processor(bool sim, bool defendPlus, VisionChannel visionChannel,
                      bool blueTeam, std::string readLogFile="")
-    : _loopMutex(), _blueTeam(blueTeam), _readLogFile(readLogFile) {
+    :   _loopMutex(),
+        _blueTeam(blueTeam),
+        _readLogFile(readLogFile),
+        _context{&_state, &_artist},
+        _state(_context) {
     _running = true;
     _manualID = -1;
     _framerate = 0;
@@ -81,11 +85,11 @@ Processor::Processor(bool sim, bool defendPlus, VisionChannel visionChannel,
     QMetaObject::connectSlotsByName(this);
 
     _vision = std::make_shared<VisionFilter>();
-    _refereeModule = std::make_shared<NewRefereeModule>(_state);
+    _refereeModule = std::make_shared<NewRefereeModule>(_context);
     _refereeModule->start();
-    _gameplayModule = std::make_shared<Gameplay::GameplayModule>(&_state);
+    _gameplayModule = std::make_shared<Gameplay::GameplayModule>(_context);
     _pathPlanner = std::unique_ptr<Planning::MultiRobotPathPlanner>(
-        new Planning::IndependentMultiRobotPathPlanner());
+        new Planning::IndependentMultiRobotPathPlanner(_context));
 
     vision.simulation = _simulation;
     if (sim) {
@@ -96,7 +100,7 @@ Processor::Processor(bool sim, bool defendPlus, VisionChannel visionChannel,
     _visionChannel = visionChannel;
 
     // Create radio socket
-    _radio = _simulation ? static_cast<Radio*>(new SimRadio(_state, _blueTeam))
+    _radio = _simulation ? static_cast<Radio*>(new SimRadio(_context, _blueTeam))
                          : static_cast<Radio*>(new USBRadio());
 
     if (!readLogFile.empty()) {
@@ -265,21 +269,23 @@ void Processor::run() {
         // Reset
 
         // Make a new log frame
-        _state.logFrame = std::make_shared<Packet::LogFrame>();
-        _state.logFrame->set_timestamp(RJ::timestamp());
-        _state.logFrame->set_command_time(
+        _log_frame = std::make_shared<Packet::LogFrame>();
+
+        _log_frame->set_timestamp(RJ::timestamp());
+        _log_frame->set_command_time(
             RJ::timestamp(startTime + Command_Latency));
-        _state.logFrame->set_use_our_half(_useOurHalf);
-        _state.logFrame->set_use_opponent_half(_useOpponentHalf);
-        _state.logFrame->set_manual_id(_manualID);
-        _state.logFrame->set_blue_team(_blueTeam);
-        _state.logFrame->set_defend_plus_x(_defendPlusX);
+        _log_frame->set_use_our_half(_useOurHalf);
+        _log_frame->set_use_opponent_half(_useOpponentHalf);
+        _log_frame->set_manual_id(_manualID);
+        _log_frame->set_blue_team(_blueTeam);
+        _log_frame->set_defend_plus_x(_defendPlusX);
+        _artist.setLogFrame(_log_frame);
 
         if (first) {
             first = false;
 
             Packet::LogConfig* logConfig =
-                _state.logFrame->mutable_log_config();
+                _log_frame->mutable_log_config();
             logConfig->set_generator("soccer");
             logConfig->set_git_version_hash(git_version_hash);
             logConfig->set_git_version_dirty(git_version_dirty);
@@ -316,7 +322,7 @@ void Processor::run() {
         vector<VisionPacket*> visionPackets;
         vision.getPackets(visionPackets);
         for (VisionPacket* packet : visionPackets) {
-            SSL_WrapperPacket* log = _state.logFrame->add_raw_vision();
+            SSL_WrapperPacket* log = _log_frame->add_raw_vision();
             log->CopyFrom(packet->wrapper);
 
             curStatus.lastVisionTime = packet->receivedTime;
@@ -341,10 +347,10 @@ void Processor::run() {
                 for (int i = 0; i < balls->size(); ++i) {
                     float x = balls->Get(i).x();
                     // FIXME - OMG too many terms
-                    if ((!_state.logFrame->use_opponent_half() &&
+                    if ((!_log_frame->use_opponent_half() &&
                          ((_defendPlusX && x < 0) ||
                           (!_defendPlusX && x > 0))) ||
-                        (!_state.logFrame->use_our_half() &&
+                        (!_log_frame->use_our_half() &&
                          ((_defendPlusX && x > 0) ||
                           (!_defendPlusX && x < 0)))) {
                         balls->SwapElements(i, balls->size() - 1);
@@ -361,10 +367,10 @@ void Processor::run() {
                 for (int team = 0; team < 2; ++team) {
                     for (int i = 0; i < robots[team]->size(); ++i) {
                         float x = robots[team]->Get(i).x();
-                        if ((!_state.logFrame->use_opponent_half() &&
+                        if ((!_log_frame->use_opponent_half() &&
                              ((_defendPlusX && x < 0) ||
                               (!_defendPlusX && x > 0))) ||
-                            (!_state.logFrame->use_our_half() &&
+                            (!_log_frame->use_our_half() &&
                              ((_defendPlusX && x > 0) ||
                               (!_defendPlusX && x < 0)))) {
                             robots[team]->SwapElements(
@@ -384,7 +390,7 @@ void Processor::run() {
 
         while (_radio->hasReversePackets()) {
             Packet::RadioRx rx = _radio->popReversePacket();
-            _state.logFrame->add_radio_rx()->CopyFrom(rx);
+            _log_frame->add_radio_rx()->CopyFrom(rx);
 
             curStatus.lastRadioRxTime =
                 RJ::Time(chrono::microseconds(rx.timestamp()));
@@ -414,7 +420,7 @@ void Processor::run() {
         vector<NewRefereePacket*> refereePackets;
         _refereeModule.get()->getPackets(refereePackets);
         for (NewRefereePacket* packet : refereePackets) {
-            SSL_Referee* log = _state.logFrame->add_raw_refbox();
+            SSL_Referee* log = _log_frame->add_raw_refbox();
             log->CopyFrom(packet->wrapper);
             curStatus.lastRefereeTime =
                 std::max(curStatus.lastRefereeTime, packet->receivedTime);
@@ -435,8 +441,8 @@ void Processor::run() {
             bluename = _state.gameState.TheirInfo.name;
         }
 
-        _state.logFrame->set_team_name_blue(bluename);
-        _state.logFrame->set_team_name_yellow(yellowname);
+        _log_frame->set_team_name_blue(bluename);
+        _log_frame->set_team_name_yellow(yellowname);
 
         // Run high-level soccer logic
         _gameplayModule->run();
@@ -446,6 +452,7 @@ void Processor::run() {
         if (_gameplayModule->hasFieldEdgeInsetChanged()) {
             _gameplayModule->calculateFieldObstacles();
         }
+
         /// Collect global obstacles
         Geometry2d::ShapeSet globalObstacles =
             _gameplayModule->globalObstacles();
@@ -465,7 +472,7 @@ void Processor::run() {
 
                 // Visualize local obstacles
                 for (auto& shape : r->localObstacles().shapes()) {
-                    _state.drawShape(shape, Qt::black, "LocalObstacles");
+                    _artist.drawShape(shape, Qt::black, "LocalObstacles");
                 }
 
                 auto& globalObstaclesForBot =
@@ -487,7 +494,7 @@ void Processor::run() {
                 requests.emplace(
                     r->shell(),
                     Planning::PlanRequest(
-                        _state, Planning::MotionInstant(r->pos, r->vel),
+                        _context, Planning::MotionInstant(r->pos, r->vel),
                         r->motionCommand()->clone(), r->robotConstraints(),
                         std::move(r->angleFunctionPath.path),
                         std::move(staticObstacles), std::move(dynamicObstacles),
@@ -500,8 +507,8 @@ void Processor::run() {
         for (auto& entry : pathsById) {
             OurRobot* r = _state.self[entry.first];
             auto& path = entry.second;
-            path->draw(&_state, Qt::magenta, "Planning");
-            path->drawDebugText(&_state);
+            path->draw(&_artist, Qt::magenta, "Planning");
+            path->drawDebugText(&_artist);
             r->setPath(std::move(path));
 
             r->angleFunctionPath.angleFunction =
@@ -510,7 +517,7 @@ void Processor::run() {
 
         // Visualize obstacles
         for (auto& shape : globalObstacles.shapes()) {
-            _state.drawShape(shape, Qt::black, "Global Obstacles");
+            _artist.drawShape(shape, Qt::black, "Global Obstacles");
         }
 
         // Run velocity controllers
@@ -529,9 +536,9 @@ void Processor::run() {
         // Store logging information
 
         // Debug layers
-        const QStringList& layers = _state.debugLayers();
-        for (const QString& str : layers) {
-            _state.logFrame->add_debug_layers(str.toStdString());
+        auto layers = _artist.debugLayers();
+        for (const std::string& str : layers) {
+            _log_frame->add_debug_layers(str);
         }
 
         // Add our robots data to the LogFram
@@ -539,7 +546,7 @@ void Processor::run() {
             if (r->visible) {
                 r->addStatusText();
 
-                Packet::LogFrame::Robot* log = _state.logFrame->add_self();
+                Packet::LogFrame::Robot* log = _log_frame->add_self();
                 *log->mutable_pos() = r->pos;
                 *log->mutable_world_vel() = r->vel;
                 *log->mutable_body_vel() = r->vel.rotated(M_PI_2 - r->angle);
@@ -585,7 +592,7 @@ void Processor::run() {
         // Opponent robots
         for (OpponentRobot* r : _state.opp) {
             if (r->visible) {
-                Packet::LogFrame::Robot* log = _state.logFrame->add_opp();
+                Packet::LogFrame::Robot* log = _log_frame->add_opp();
                 *log->mutable_pos() = r->pos;
                 log->set_shell(r->shell());
                 log->set_angle(r->angle);
@@ -596,7 +603,7 @@ void Processor::run() {
 
         // Ball
         if (_state.ball.valid) {
-            Packet::LogFrame::Ball* log = _state.logFrame->mutable_ball();
+            Packet::LogFrame::Ball* log = _log_frame->mutable_ball();
             *log->mutable_pos() = _state.ball.pos;
             *log->mutable_vel() = _state.ball.vel;
         }
@@ -609,7 +616,7 @@ void Processor::run() {
 
         // Write to the log unless we are viewing logs
         if (_readLogFile.empty()) {
-            _logger.addFrame(_state.logFrame);
+            _logger.addFrame(_log_frame);
         }
 
         // Store processing loop status
@@ -727,7 +734,7 @@ void Processor::updateGeometryPacket(const SSL_GeometryFieldSize& fieldSize) {
 }
 
 void Processor::sendRadioData() {
-    Packet::RadioTx* tx = _state.logFrame->mutable_radio_tx();
+    Packet::RadioTx* tx = _log_frame->mutable_radio_tx();
     tx->set_txmode(Packet::RadioTx::UNICAST);
 
     // Halt overrides normal motion control, but not joystick
@@ -794,7 +801,7 @@ void Processor::sendRadioData() {
     }
 
     if (_radio) {
-        _radio->send(*_state.logFrame->mutable_radio_tx());
+        _radio->send(*_log_frame->mutable_radio_tx());
     }
 }
 

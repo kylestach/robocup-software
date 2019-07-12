@@ -2,12 +2,12 @@
 
 #include <Geometry2d/Point.hpp>
 #include <Geometry2d/ShapeSet.hpp>
+#include "DebugArtist.hpp"
 #include "MotionInstant.hpp"
 #include "Utils.hpp"
 
 #include <boost/optional.hpp>
 #include <QColor>
-#include <QString>
 
 #include "DynamicObstacle.hpp"
 
@@ -65,8 +65,8 @@ public:
      * @param color The color the path should be drawn
      * @param layer The layer to draw the path on
      */
-    virtual void draw(SystemState* const state, const QColor& color = Qt::black,
-                      const QString& layer = "Motion") const;
+    virtual void draw(DebugArtist* artist, const QColor& color = Qt::black,
+                      const std::string& layer = "Motion") const;
 
     /**
      * Returns how long it would take for the entire path to be traversed
@@ -102,13 +102,13 @@ public:
      */
     virtual std::unique_ptr<Path> clone() const = 0;
 
-    virtual void setDebugText(QString string) {
+    virtual void setDebugText(std::string string) {
         _debugText = std::move(string);
     }
 
-    virtual void drawDebugText(SystemState* state,
+    virtual void drawDebugText(DebugArtist* artist,
                                const QColor& color = Qt::darkCyan,
-                               const QString& layer = "PathDebugText") const;
+                               const std::string& layer = "PathDebugText") const;
 
     /// The time the path starts at
     virtual RJ::Time startTime() const { return _startTime; }
@@ -129,7 +129,7 @@ protected:
 
     double evalRate = 1.0;
     RJ::Time _startTime;
-    boost::optional<QString> _debugText;
+    boost::optional<std::string> _debugText;
 };
 
 /**
@@ -170,9 +170,9 @@ public:
      * @param color The color the path should be drawn
      * @param layer The layer to draw the path on
      */
-    virtual void draw(SystemState* const state, const QColor& color = Qt::black,
-                      const QString& layer = "Motion") const override {
-        path->draw(state, color, layer);
+    virtual void draw(DebugArtist* artist, const QColor& color = Qt::black,
+                      const std::string& layer = "Motion") const override {
+        path->draw(artist, color, layer);
     }
 
     /**
@@ -231,14 +231,14 @@ public:
 
     virtual RJ::Time startTime() const override { return path->startTime(); }
     virtual void setStartTime(RJ::Time t) override { path->setStartTime(t); }
-    virtual void setDebugText(QString string) override {
+    virtual void setDebugText(std::string string) override {
         path->setDebugText(std::move(string));
     }
 
     virtual void drawDebugText(
-        SystemState* state, const QColor& color = Qt::darkCyan,
-        const QString& layer = "PathDebugText") const override {
-        path->drawDebugText(state, color, layer);
+        DebugArtist* artist, const QColor& color = Qt::darkCyan,
+        const std::string& layer = "PathDebugText") const override {
+        path->drawDebugText(artist, color, layer);
     }
 
 protected:

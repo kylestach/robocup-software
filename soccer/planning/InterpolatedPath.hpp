@@ -1,5 +1,6 @@
 #pragma once
 
+#include <DebugArtist.hpp>
 #include <planning/Path.hpp>
 #include <Geometry2d/Point.hpp>
 #include <Geometry2d/Segment.hpp>
@@ -63,8 +64,8 @@ public:
     virtual std::unique_ptr<Path> subPath(
         RJ::Seconds startTime = RJ::Seconds::zero(),
         RJ::Seconds endTime = RJ::Seconds::max()) const override;
-    virtual void draw(SystemState* const state, const QColor& color,
-                      const QString& layer) const override;
+    virtual void draw(DebugArtist* artist, const QColor& color,
+                      const std::string& layer) const override;
     virtual RJ::Seconds getDuration() const override;
     virtual std::unique_ptr<Path> clone() const override;
 

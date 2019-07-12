@@ -10,6 +10,7 @@
 #include <Geometry2d/Point.hpp>
 #include <Geometry2d/CompositeShape.hpp>
 #include <Geometry2d/ShapeSet.hpp>
+#include <Context.hpp>
 
 #include <set>
 #include <QMutex>
@@ -19,7 +20,6 @@
 #include <Configuration.hpp>
 
 class OurRobot;
-class SystemState;
 
 /**
  * @brief Higher-level logic for soccer
@@ -42,10 +42,10 @@ namespace Gameplay {
  */
 class GameplayModule {
 public:
-    GameplayModule(SystemState* state);
+    GameplayModule(Context context);
     virtual ~GameplayModule();
 
-    SystemState* state() const { return _state; }
+    Context context() const { return _context; }
 
     virtual void run();
 
@@ -135,7 +135,7 @@ private:
     static ConfigDouble* _fieldEdgeInset;
     double _oldFieldEdgeInset;
 
-    SystemState* _state;
+    Context _context;
 
     std::set<OurRobot*> _playRobots;
 

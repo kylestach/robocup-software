@@ -176,11 +176,11 @@ float InterpolatedPath::length(Point pt) const {
     return length;
 }
 
-void InterpolatedPath::draw(SystemState* const state,
+void InterpolatedPath::draw(DebugArtist* artist,
                             const QColor& col = Qt::black,
-                            const QString& layer = "Motion") const {
-    Packet::DebugRobotPath* dbg = state->logFrame->add_debug_robot_paths();
-    dbg->set_layer(state->findDebugLayer(layer));
+                            const std::string& layer = "Motion") const {
+    Packet::DebugRobotPath* dbg = artist->log_frame_->add_debug_robot_paths();
+    dbg->set_layer(artist->findDebugLayer(layer));
 
     if (waypoints.size() <= 1) {
         return;

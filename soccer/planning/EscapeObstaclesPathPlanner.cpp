@@ -34,7 +34,7 @@ std::unique_ptr<Path> EscapeObstaclesPathPlanner::run(
         startInstant.pos, optPrevPt, obstacles, 300,
         [&](const RRT::Tree<Point>& rrt) {
             if (*RRTConfig::EnableRRTDebugDrawing) {
-                DrawRRT(rrt, &planRequest.systemState, planRequest.shellID);
+                DrawRRT(rrt, _context.artist, planRequest.shellID);
             }
         });
 

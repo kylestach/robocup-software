@@ -19,6 +19,8 @@ using namespace boost::python;
 #include <Geometry2d/Rect.hpp>
 #include <Robot.hpp>
 #include <SystemState.hpp>
+#include <Context.hpp>
+#include <DebugArtist.hpp>
 #include <motion/MotionControl.hpp>
 #include <rc-fshare/pid.hpp>
 #include "KickEvaluator.hpp"
@@ -163,8 +165,7 @@ void OurRobot_approach_opponent(OurRobot* self, unsigned shell_id,
 void OurRobot_add_text(OurRobot* self, const std::string& text,
                        boost::python::tuple rgb,
                        const std::string& layerPrefix) {
-    self->addText(QString::fromStdString(text), Color_from_tuple(rgb),
-                  QString::fromStdString(layerPrefix));
+    self->addText(text, Color_from_tuple(rgb), layerPrefix);
 }
 
 void OurRobot_set_avoid_opponents(OurRobot* self, bool value) {
@@ -351,70 +352,63 @@ boost::python::tuple Line_intersects_circle(Geometry2d::Line* self,
     return boost::python::tuple(lst);
 }
 
-void State_draw_circle(SystemState* self, const Geometry2d::Point* center,
+void Artist_draw_circle(DebugArtist* self, const Geometry2d::Point* center,
                        float radius, boost::python::tuple rgb,
                        const std::string& layer) {
     if (center == nullptr) throw NullArgumentException("center");
-    self->drawCircle(*center, radius, Color_from_tuple(rgb),
-                     QString::fromStdString(layer));
+    self->drawCircle(*center, radius, Color_from_tuple(rgb), layer);
 }
 
-void State_draw_arc(SystemState* self, const Geometry2d::Arc* arc,
+void Artist_draw_arc(DebugArtist* self, const Geometry2d::Arc* arc,
                     boost::python::tuple rgb, const std::string& layer) {
     if (arc == nullptr) throw NullArgumentException{"arc"};
-    self->drawArc(*arc, Color_from_tuple(rgb), QString::fromStdString(layer));
+    self->drawArc(*arc, Color_from_tuple(rgb), layer);
 }
 
 // TODO(ashaw596) Fix this lie of a function
-void State_draw_line(SystemState* self, const Geometry2d::Line* line,
+void Artist_draw_line(DebugArtist* self, const Geometry2d::Line* line,
                      boost::python::tuple rgb, const std::string& layer) {
     if (line == nullptr) throw NullArgumentException("line");
-    self->drawLine(Geometry2d::Segment(*line), Color_from_tuple(rgb),
-                   QString::fromStdString(layer));
+    self->drawLine(Geometry2d::Segment(*line), Color_from_tuple(rgb), layer);
 }
 
-void State_draw_segment(SystemState* self, const Geometry2d::Segment* segment,
+void Artist_draw_segment(DebugArtist* self, const Geometry2d::Segment* segment,
                         boost::python::tuple rgb, const std::string& layer) {
     if (segment == nullptr) throw NullArgumentException("segment");
-    self->drawSegment(*segment, Color_from_tuple(rgb),
-                      QString::fromStdString(layer));
+    self->drawSegment(*segment, Color_from_tuple(rgb), layer);
 }
 
-void State_draw_segment_from_points(SystemState* self,
+void Artist_draw_segment_from_points(DebugArtist* self,
                                     const Geometry2d::Point* p0,
                                     const Geometry2d::Point* p1,
                                     boost::python::tuple rgb,
                                     const std::string& layer) {
     if (p0 == nullptr) throw NullArgumentException{"p0"};
     if (p1 == nullptr) throw NullArgumentException{"p1"};
-    self->drawLine(*p0, *p1, Color_from_tuple(rgb),
-                   QString::fromStdString(layer));
+    self->drawLine(*p0, *p1, Color_from_tuple(rgb), layer);
 }
 
-void State_draw_text(SystemState* self, const std::string& text,
+void Artist_draw_text(DebugArtist* self, const std::string& text,
                      Geometry2d::Point* pos, boost::python::tuple rgb,
                      const std::string& layer) {
     if (pos == nullptr) throw NullArgumentException("pos");
-    self->drawText(QString::fromStdString(text), *pos, Color_from_tuple(rgb),
-                   QString::fromStdString(layer));
+    self->drawText(text, *pos, Color_from_tuple(rgb), layer);
 }
 
-void State_draw_polygon(SystemState* self, const boost::python::list& points,
+void Artist_draw_polygon(DebugArtist* self, const boost::python::list& points,
                         boost::python::tuple rgb, const std::string& layer) {
     std::vector<Geometry2d::Point> ptVec;
     for (int i = 0; i < len(points); i++) {
         ptVec.push_back(boost::python::extract<Geometry2d::Point>(points[i]));
     }
 
-    self->drawPolygon(ptVec, Color_from_tuple(rgb),
-                      QString::fromStdString(layer));
+    self->drawPolygon(ptVec, Color_from_tuple(rgb), layer);
 }
 
-void State_draw_raw_polygon(SystemState* self, Geometry2d::Polygon points,
+void Artist_draw_raw_polygon(DebugArtist* self, Geometry2d::Polygon points,
                             boost::python::tuple rgb,
                             const std::string& layer) {
-    self->drawPolygon(points, Color_from_tuple(rgb),
-                      QString::fromStdString(layer));
+    self->drawPolygon(points, Color_from_tuple(rgb), layer);
 }
 
 boost::python::list Circle_intersects_line(Geometry2d::Circle* self,
@@ -819,7 +813,7 @@ BOOST_PYTHON_MODULE(robocup) {
         .def("__eq__", &Robot::operator==);
 
     class_<OurRobot, OurRobot*, bases<Robot>, boost::noncopyable>(
-        "OurRobot", init<int, SystemState*>())
+        "OurRobot", init<int, Context>())
         .def("move_to", &OurRobot_move_to)
         .def("move_to_end_vel", &OurRobot_move_to_end_vel)
         .def("move_to_direct", &OurRobot_move_to_direct)
@@ -886,25 +880,28 @@ BOOST_PYTHON_MODULE(robocup) {
     class_<std::vector<OpponentRobot*>>("vector_OpponentRobot")
         .def(vector_indexing_suite<std::vector<OpponentRobot*>>());
 
-    class_<SystemState, SystemState*>("SystemState")
+    class_<SystemState, SystemState*>("SystemState", init<Context>())
         .def_readonly("our_robots", &SystemState::self)
         .def_readonly("their_robots", &SystemState::opp)
         .def_readonly("ball", &SystemState::ball)
         .def_readonly("game_state", &SystemState::gameState)
 
-        .add_property("timestamp", &SystemState::timestamp)
+        .add_property("timestamp", &SystemState::timestamp);
+
+    class_<Context, Context*>("Context");
 
         // debug drawing methods
-        .def("draw_circle", &State_draw_circle)
-        .def("draw_text", &State_draw_text)
-        .def("draw_shape", &SystemState::drawShape)
-        .def("draw_line", &State_draw_line)
-        .def("draw_line", &State_draw_segment)
-        .def("draw_segment", &State_draw_segment)
-        .def("draw_polygon", &State_draw_polygon)
-        .def("draw_arc", &State_draw_arc)
-        .def("draw_raw_polygon", &State_draw_raw_polygon)
-        .def("draw_arc", &State_draw_arc);
+    class_<DebugArtist, DebugArtist*>("DebugArtist")
+        .def("draw_circle", &Artist_draw_circle)
+        .def("draw_text", &Artist_draw_text)
+        .def("draw_shape", &DebugArtist::drawShape)
+        .def("draw_line", &Artist_draw_line)
+        .def("draw_line", &Artist_draw_segment)
+        .def("draw_segment", &Artist_draw_segment)
+        .def("draw_polygon", &Artist_draw_polygon)
+        .def("draw_arc", &Artist_draw_arc)
+        .def("draw_raw_polygon", &Artist_draw_raw_polygon)
+        .def("draw_arc", &Artist_draw_arc);
 
     class_<Field_Dimensions>("Field_Dimensions")
         .def("OurGoalZoneShapePadded", &Field_Dimensions::OurGoalZoneShapePadded)
@@ -953,7 +950,7 @@ BOOST_PYTHON_MODULE(robocup) {
     class_<std::vector<Window>>("vector_Window")
         .def(vector_indexing_suite<std::vector<Window>>());
 
-    class_<WindowEvaluator>("WindowEvaluator", init<SystemState*>())
+    class_<WindowEvaluator>("WindowEvaluator", init<Context>())
         .def_readwrite("debug", &WindowEvaluator::debug)
         .def_readwrite("chip_enabled", &WindowEvaluator::chip_enabled)
         .def_readwrite("max_chip_range", &WindowEvaluator::max_chip_range)

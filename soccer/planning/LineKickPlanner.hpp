@@ -19,7 +19,7 @@ namespace Planning {
  */
 class LineKickPlanner : public SingleRobotPathPlanner {
 public:
-    LineKickPlanner() : SingleRobotPathPlanner(false), rrtPlanner(0, 250){};
+    LineKickPlanner(Context context) : SingleRobotPathPlanner(false), rrtPlanner(context, 0, 250), context(context) {};
     virtual std::unique_ptr<Path> run(PlanRequest& planRequest) override;
 
     virtual MotionCommand::CommandType commandType() const override {
@@ -28,6 +28,8 @@ public:
 
 private:
     bool shouldReplan(const PlanRequest& planRequest) const;
+
+    Context context;
 
     RRTPlanner rrtPlanner;
     bool finalApproach = false;

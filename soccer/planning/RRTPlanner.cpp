@@ -30,9 +30,10 @@ void RRTPlanner::createConfiguration(Configuration* cfg) {
         cfg, "RRTPlanner/partialReplanLeadTime", 0.2, "partialReplanLeadTime");
 }
 
-RRTPlanner::RRTPlanner(int minIterations, int maxIterations)
+RRTPlanner::RRTPlanner(Context context, int minIterations, int maxIterations)
     : _minIterations(minIterations),
       _maxIterations(maxIterations),
+      _context(context),
       SingleRobotPathPlanner(true) {}
 
 bool veeredOffPath(Point currentPos, const Path& path,
@@ -141,7 +142,7 @@ std::unique_ptr<Path> RRTPlanner::run(PlanRequest& planRequest) {
     goal.pos = EscapeObstaclesPathPlanner::findNonBlockedGoal(
         goal.pos, prevGoal, obstacles);
 
-    string debugOut;
+    std::string debugOut;
 
     const auto partialReplanTime = RJ::Seconds(*_partialReplanLeadTime);
 
@@ -222,13 +223,12 @@ std::unique_ptr<Path> RRTPlanner::run(PlanRequest& planRequest) {
 
         auto newSubPath = generateRRTPath(
             newStart.motion, goal, motionConstraints, obstacles, actualDynamic,
-            &planRequest.systemState, planRequest.shellID, biasWaypoints);
+            planRequest.context.state, planRequest.shellID, biasWaypoints);
         if (newSubPath) {
             path = make_unique<CompositePath>(std::move(subPath),
                                               std::move(newSubPath));
             path->setStartTime(prevPath->startTime());
-            path->setDebugText(
-                QString::fromStdString("partialReplan" + debugOut));
+            path->setDebugText("partialReplan" + debugOut);
 
             if (replanState == CheckBetter) {
                 RJ::Seconds remaining = prevPath->getDuration() -
@@ -256,11 +256,10 @@ std::unique_ptr<Path> RRTPlanner::run(PlanRequest& planRequest) {
         return path;
     } else if (replanState == FullReplan) {
         path = generateRRTPath(start, goal, motionConstraints, obstacles,
-                               actualDynamic, &planRequest.systemState,
+                               actualDynamic, planRequest.context.state,
                                planRequest.shellID);
         if (path) {
-            path->setDebugText(
-                QString::fromStdString("FullReplan." + debugOut));
+            path->setDebugText("FullReplan." + debugOut);
         } else {
             path = InterpolatedPath::emptyPath(start.pos);
         }
@@ -386,7 +385,7 @@ vector<Point> RRTPlanner::runRRTHelper(
     if (!success) return vector<Point>();
 
     if (*RRTConfig::EnableRRTDebugDrawing) {
-        DrawBiRRT(biRRT, state, shellID);
+        DrawBiRRT(biRRT, _context.artist, shellID);
     }
 
     vector<Point> points = biRRT.getPath();

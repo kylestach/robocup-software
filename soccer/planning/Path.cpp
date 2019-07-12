@@ -12,10 +12,10 @@ class ConstPathIterator;
 
 // This method is a default implementation of draw() that works by evaluating
 // the path at fixed time intervals form t = 0 to t = duration.
-void Path::draw(SystemState* const state, const QColor& color,
-                const QString& layer) const {
-    Packet::DebugRobotPath* dbg = state->logFrame->add_debug_robot_paths();
-    dbg->set_layer(state->findDebugLayer(layer));
+void Path::draw(DebugArtist* artist, const QColor& color,
+                const std::string& layer) const {
+    Packet::DebugRobotPath* dbg = artist->log_frame_->add_debug_robot_paths();
+    dbg->set_layer(artist->findDebugLayer(layer));
 
     auto addPoint = [dbg](MotionInstant instant) {
         Packet::DebugRobotPath::DebugRobotPathPoint* pt = dbg->add_points();
@@ -42,10 +42,10 @@ void Path::draw(SystemState* const state, const QColor& color,
     addPoint(end().motion);
 }
 
-void Path::drawDebugText(SystemState* state, const QColor& color,
-                         const QString& layer) const {
+void Path::drawDebugText(DebugArtist* artist, const QColor& color,
+                         const std::string& layer) const {
     if (_debugText) {
-        state->drawText(_debugText.get(), end().motion.pos, color, layer);
+        artist->drawText(_debugText.get(), end().motion.pos, color, layer);
     }
 }
 

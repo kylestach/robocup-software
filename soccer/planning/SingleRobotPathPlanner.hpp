@@ -5,6 +5,7 @@
 #include <planning/MotionConstraints.hpp>
 #include <planning/MotionInstant.hpp>
 #include <planning/Path.hpp>
+#include <Context.hpp>
 //#include "MultiRobotPathPlanner.hpp"
 #include "planning/DynamicObstacle.hpp"
 #include "planning/PlanRequest.hpp"
@@ -79,7 +80,7 @@ private:
 /// registered by placing them in this function's implementation in the .cpp
 /// file.
 std::unique_ptr<Planning::SingleRobotPathPlanner> PlannerForCommandType(
-    Planning::MotionCommand::CommandType type);
+    Planning::MotionCommand::CommandType type, Context context);
 
 boost::optional<std::function<AngleInstant(MotionInstant)>>
 angleFunctionForCommandType(const Planning::RotationCommand& command);

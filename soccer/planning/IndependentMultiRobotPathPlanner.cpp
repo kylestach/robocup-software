@@ -23,7 +23,7 @@ std::map<int, std::unique_ptr<Path>> IndependentMultiRobotPathPlanner::run(
             prevPlanner->commandType() !=
                 request.motionCommand->getCommandType()) {
             _planners[shell] =
-                PlannerForCommandType(request.motionCommand->getCommandType());
+                PlannerForCommandType(request.motionCommand->getCommandType(), _context);
             request.prevPath = nullptr;
         }
 

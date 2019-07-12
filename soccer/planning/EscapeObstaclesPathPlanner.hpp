@@ -1,6 +1,7 @@
 #include <Geometry2d/Point.hpp>
 #include <functional>
 #include <rrt/Tree.hpp>
+#include <Context.hpp>
 #include "SingleRobotPathPlanner.hpp"
 
 class Configuration;
@@ -12,7 +13,7 @@ namespace Planning {
 /// point isn't in an obstacle, returns a path containing only the start point.
 class EscapeObstaclesPathPlanner : public SingleRobotPathPlanner {
 public:
-    EscapeObstaclesPathPlanner() : SingleRobotPathPlanner(false){};
+    EscapeObstaclesPathPlanner(Context context) : SingleRobotPathPlanner(false), _context(context) {};
 
     virtual std::unique_ptr<Path> run(PlanRequest& planRequest) override;
 
@@ -38,6 +39,9 @@ public:
     static float goalChangeThreshold() { return *_goalChangeThreshold; }
 
 private:
+    /// For debug drawing and system state.
+    Context _context;
+
     /// Step size for the RRT used to find an unblocked point in
     /// findNonBlockedGoal()
     static ConfigDouble* _stepSize;

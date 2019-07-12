@@ -1,7 +1,7 @@
 #include <Geometry2d/Point.hpp>
 #include <rrt/BiRRT.hpp>
 #include "Configuration.hpp"
-#include "SystemState.hpp"
+#include "DebugArtist.hpp"
 
 namespace Planning {
 
@@ -19,8 +19,8 @@ public:
 };
 
 /// Drawing
-void DrawRRT(const RRT::Tree<Geometry2d::Point>& rrt, SystemState* state,
+void DrawRRT(const RRT::Tree<Geometry2d::Point>& rrt, DebugArtist* artist,
              unsigned shellID);
-void DrawBiRRT(const RRT::BiRRT<Geometry2d::Point>& biRRT, SystemState* state,
+void DrawBiRRT(const RRT::BiRRT<Geometry2d::Point>& biRRT, DebugArtist* artist,
                unsigned shellID);
 }  // Planning
