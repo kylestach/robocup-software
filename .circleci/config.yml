@@ -1,3 +1,5 @@
+version: 2
+
 defaults: &dir
   working_directory: ~/robocup-software
 
