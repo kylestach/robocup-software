@@ -44,7 +44,7 @@ jobs:
     steps:
       - checkout
       - <<: *install_deps
-      - make checkstyle-old
+      - run: make checkstyle-old
 
 workflows:
   version: 2
