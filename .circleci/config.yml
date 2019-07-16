@@ -4,14 +4,17 @@ defaults: &image
   docker:
     - image: robojackets/robocup-software:master
 
+defaults: &install_deps
+  run:
+    name: Install Dependencies
+    command: sudo ./util/ubuntu-setup --yes
+
 jobs:
   build_and_test:
     <<: *image
     steps:
       - checkout
-      - run:
-          name: Install Dependencies
-          command: sudo ./util/ubuntu-setup --yes
+      - <<: *install_deps
       - run: make
       - run:
           name: Tests
@@ -25,7 +28,7 @@ jobs:
       - image: python:3
     steps:
       - checkout
-      - run: pip3 install r util/requirements3.txt
+      - run: pip3 install -r util/requirements3.txt
       - run: make mypy
 
   pylint:
@@ -33,8 +36,15 @@ jobs:
       - image: python:3
     steps:
       - checkout
-      - run: pip3 install r util/requirements3.txt
+      - run: pip3 install -r util/requirements3.txt
       - run: make pylint
+
+  style:
+    <<: *image
+    steps:
+      - checkout
+      - <<: *install_deps
+      - make checkstyle-old
 
 workflows:
   version: 2
