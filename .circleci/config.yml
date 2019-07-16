@@ -37,6 +37,8 @@ jobs:
       - run: make pylint
 
 workflows:
+  version: 2
+
   all:
     jobs:
       - build_and_test
