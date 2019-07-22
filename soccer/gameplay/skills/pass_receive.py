@@ -19,17 +19,17 @@ class PassReceive(single_robot_composite_behavior.SingleRobotCompositeBehavior
                   ):
 
     ## max difference between where we should be facing and where we are facing (in radians)
-    FaceAngleErrorThreshold = 8 * constants.DegreesToRadians
+    FaceAngleErrorThreshold = 15 * constants.DegreesToRadians
 
     ## how much we're allowed to be off in the direction of the pass line
-    PositionYErrorThreshold = 0.06
+    PositionYErrorThreshold = 0.20
 
     ## how much we're allowed to be off side-to-side from the pass line
-    PositionXErrorThreshold = 0.03
+    PositionXErrorThreshold = 0.20
 
     ## we have to be going slower than this to be considered 'steady'
-    SteadyMaxVel = 0.04
-    SteadyMaxAngleVel = 3 * constants.DegreesToRadians  # degrees / second
+    SteadyMaxVel = 0.3
+    SteadyMaxAngleVel = 30 * constants.DegreesToRadians  # degrees / second
 
     MarginAngle = math.pi / 18
     StabilizationFrames = 3
@@ -83,7 +83,7 @@ class PassReceive(single_robot_composite_behavior.SingleRobotCompositeBehavior
 
         self.add_transition(PassReceive.State.receiving,
                             behavior.Behavior.State.completed,
-                            lambda: self.robot.has_ball(), 'ball received!')
+                            lambda: self.robot.has_ball() and self.subbehavior_with_name('capture').state == behavior.Behavior.State.completed, 'ball received!')
 
         self.add_transition(
             PassReceive.State.receiving, behavior.Behavior.State.failed,
@@ -175,7 +175,6 @@ class PassReceive(single_robot_composite_behavior.SingleRobotCompositeBehavior
 
     def execute_running(self):
         self.recalculate()
-        self.robot.face(main.ball().pos)
 
         if self._pass_line != None:
             main.system_state().draw_line(self._pass_line,
@@ -186,6 +185,8 @@ class PassReceive(single_robot_composite_behavior.SingleRobotCompositeBehavior
     def execute_aligning(self):
         if self._target_pos != None:
             self.robot.move_to(self._target_pos)
+            
+        self.robot.face(main.ball().pos)
 
     def reset_correct_location(self):
         # Extrapolate center of robot location from kick velocity

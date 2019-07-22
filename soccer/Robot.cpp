@@ -206,12 +206,32 @@ void OurRobot::move(Geometry2d::Point goal, Geometry2d::Point endVelocity) {
               << ")" << endl;
 }
 
+void OurRobot::settle(std::optional<Point> target) {
+    if (!visible) return;
+
+    _motionCommand = std::make_unique<Planning::SettleCommand>(target);
+}
+
+void OurRobot::collect() {
+    if (!visible) return;
+
+    _motionCommand = std::make_unique<Planning::CollectCommand>();
+}
+
 void OurRobot::lineKick(Point target) {
     if (!visible) return;
 
     disableAvoidBall();
     _motionCommand =
-        std::make_unique<Planning::LineKickCommand>(std::move(target));
+        std::make_unique<Planning::LineKickCommand>(target);
+}
+
+void OurRobot::intercept(Point target) {
+    if (!visible) return;
+
+    disableAvoidBall();
+    _motionCommand =
+        std::make_unique<Planning::InterceptCommand>(target);
 }
 
 void OurRobot::worldVelocity(Geometry2d::Point v) {
@@ -287,6 +307,20 @@ void OurRobot::face(Geometry2d::Point pt) {
 
     *_cmdText << "face(" << pt.x() << ", " << pt.y() << ")" << endl;
 }
+
+bool OurRobot::isFacing() {
+    if (_rotationCommand && _rotationCommand->getCommandType() == Planning::RotationCommand::CommandType::None) {
+        return false;
+    } else {
+        return true;
+    }
+    //if (_rotationCommand && *_rotationCommand == Planning::EmptyAngleCommand{}) {
+    //    return false;
+    //} else {
+    //    return true;
+    //}
+}
+
 
 void OurRobot::faceNone() {
     _rotationCommand = std::make_unique<Planning::EmptyAngleCommand>();
@@ -531,7 +565,7 @@ bool OurRobot::kickerWorks() const {
 }
 
 bool OurRobot::chipper_available() const {
-    return hardwareVersion() == Packet::RJ2011 && kickerWorks() &&
+    return kickerWorks() &&
            *status->chipper_enabled;
 }
 

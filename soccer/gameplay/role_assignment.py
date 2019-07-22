@@ -11,13 +11,14 @@ class RoleRequirements:
     def __init__(self):
         self.destination_shape = None
         self.has_ball = False
-        self.chipper_preference_weight = 0
+        self.chipper_preference_weight = 0.0
         self.required_shell_id = None
         self.previous_shell_id = None
         self.prohibited_shell_id = None
         self.required = False
-        self.priority = 0
+        self.priority = 0.0
         self.require_kicking = False
+        self.require_chipping = False
         self.robot_change_cost = 1.0
 
         # multiply this by the distance between two points to get the cost
@@ -25,7 +26,7 @@ class RoleRequirements:
 
         # A lambda function property that allows customization of cost
         # Has exactly one parameter, which is a robot
-        self.cost_func = lambda r: 0
+        self.cost_func = lambda r: 0.0
 
     def __str__(self):
         props = []
@@ -105,6 +106,17 @@ class RoleRequirements:
     def require_kicking(self, value):
         self._require_kicking = value
 
+    # if True, requires that the robot has a working ball sensor, a working chipper,
+    # and isn't forbidden from touching the ball by the double touch rules
+    # Default: False
+    @property
+    def require_chipping(self):
+        return self._require_chipping
+
+    @require_chipping.setter
+    def require_chipping(self, value):
+        self._require_chipping = value
+
     @property
     def required_shell_id(self):
         return self._required_shell_id
@@ -180,7 +192,12 @@ class ImpossibleAssignmentError(RuntimeError):
 
 
 # the munkres library doesn't like infinity, so we use this instead
-MaxWeight = 10000000
+MaxWeight = 10000000.0
+
+# The munkres library works in ints, so multiply everything by 1000
+# In theory it should work with floats, but the types are getting messed up
+# This creates a fixed point type situation
+IntScale = 1000.0
 
 # a default weight for preferring a chipper
 # this is tunable
@@ -265,7 +282,7 @@ def assign_roles(robots, role_reqs):
     for robot in robots:
         cost_row = []
         for req in role_reqs_list:
-            cost = 0
+            cost = 0.0
 
             if req.required_shell_id is not None and req.required_shell_id != robot.shell_id(
             ):
@@ -287,6 +304,15 @@ def assign_roles(robots, role_reqs):
                     "Robot {}: does not have a fully working kicking setup"
                     " (or double touched)\n"
                         .format(robot.shell_id()))
+            elif req.require_chipping and (
+                    robot.shell_id() == evaluation.double_touch.tracker()
+                    .forbidden_ball_toucher() or not robot.has_chipper() or
+                    not robot.ball_sense_works()):
+                cost = MaxWeight
+                fail_reason += (
+                    "Robot {}: does not have a chipper"
+                    " (or double touched)\n"
+                        .format(robot.shell_id()))
             else:
                 if req.prohibited_shell_id is not None and req.prohibited_shell_id == robot.shell_id():
                     cost = MaxWeight
@@ -297,6 +323,8 @@ def assign_roles(robots, role_reqs):
                 if not robot.has_chipper():
                     cost += req.chipper_preference_weight
                 cost += req.cost_func(robot)
+
+                cost *= IntScale
 
             # the munkres library freezes when given NaN values, causing our
             # whole program to hang and have to be restarted.  We check for it
@@ -329,7 +357,7 @@ def assign_roles(robots, role_reqs):
     assignments = {}
     total = 0
     for row, col in indexes:
-        total += cost_matrix[row][col]
+        total += cost_matrix[row][col] / IntScale
 
         bot = robots[row]
         reqs = role_reqs_list[col]
