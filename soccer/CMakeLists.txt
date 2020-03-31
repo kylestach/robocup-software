@@ -65,6 +65,7 @@ set(ROBOCUP_LIB_SRC
     "ui/SimFieldView.cpp"
     "ui/StripChart.cpp"
     "ui/StyleSheetManager.cpp"
+    "ui/ControlBar.cpp"
     "GrSimCommunicator.cpp"
     "VisionReceiver.cpp"
     "vision/ball/BallBounce.cpp"
