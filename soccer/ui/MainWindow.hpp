@@ -12,18 +12,11 @@
 #include "Processor.hpp"
 #include "rc-fshare/rtp.hpp"
 #include "ui_MainWindow.h"
+#include "ControlBar.hpp"
 
 class TestResultTab;
 class StripChart;
 class ConfigBool;
-
-enum RadioChannels { MHz_916, MHz_918 };
-
-namespace {
-// Style sheets used for live/non-live controls
-QString LiveStyle("border:2px solid transparent");
-QString NonLiveStyle("border:2px solid red");
-};  // namespace
 
 enum Side { Yellow, Blue };
 /**
@@ -47,32 +40,8 @@ public:
     /// Selects all debug layers
     void allDebugOn();
 
-    bool live();
-
-    void setLive() {
-        if (!live()) {
-            _ui.logTree->setStyleSheet(
-                QString("QTreeWidget{%1}").arg(NonLiveStyle));
-            _playbackRate = std::nullopt;
-        }
-    }
-
-    void setPlayBackRate(double playbackRate) {
-        if (live()) {
-            _ui.logTree->setStyleSheet(
-                QString("QTreeWidget{%1}").arg(LiveStyle));
-        }
-        _playbackRate = playbackRate;
-    }
-
-    int frameNumber() const { return roundf(_doubleFrameNumber); }
-
-    void frameNumber(int value) { _doubleFrameNumber = value; }
-
     // Call this to update the status bar when the log file has changed
     void logFileChanged();
-
-    void setRadioChannel(RadioChannels channel);
 
     QTimer updateTimer;
 
@@ -90,8 +59,6 @@ private Q_SLOTS:
     void on_actionTeam_Names_toggled(bool state);
     void on_actionTeamYellow_triggered();
     void on_actionTeamBlue_triggered();
-    void on_manualID_currentIndexChanged(int value);
-    void on_goalieID_currentIndexChanged(int value);
 
     void on_actionUse_Field_Oriented_Controls_toggled(bool value);
     void on_actionUse_Multiple_Joysticks_toggled(bool value);
@@ -110,10 +77,6 @@ private Q_SLOTS:
     void on_action180_triggered();
     void on_action270_triggered();
 
-    /// Radio channels
-    void on_action916MHz_triggered();
-    void on_action918MHz_triggered();
-
     /// Vision port
     void on_actionVisionPrimary_Half_triggered();
     void on_actionVisionSecondary_Half_triggered();
@@ -123,9 +86,6 @@ private Q_SLOTS:
     void on_actionCenterBall_triggered();
     void on_actionStopBall_triggered();
     void on_actionResetField_triggered();
-    void on_actionStopRobots_triggered();
-    void on_actionQuicksaveRobotLocations_triggered();
-    void on_actionQuickloadRobotLocations_triggered();
 
     /// Style Sheets
     void on_actionNoneStyle_triggered();
@@ -148,17 +108,6 @@ private Q_SLOTS:
     // Joystick settings
     void on_joystickKickOnBreakBeam_stateChanged();
 
-    /// Log controls
-    void on_logHistoryLocation_sliderMoved(int value);
-    void on_logHistoryLocation_sliderReleased();
-    void on_logHistoryLocation_sliderPressed();
-    void on_logPlaybackRewind_clicked();
-    void on_logPlaybackPrevFrame_clicked();
-    void on_logPlaybackPause_clicked();
-    void on_logPlaybackNextFrame_clicked();
-    void on_logPlaybackPlay_clicked();
-    void on_logPlaybackLive_clicked();
-
     /// Debug layers
     void on_debugLayers_itemChanged(QListWidgetItem* item);
     void on_debugLayers_customContextMenuRequested(const QPoint& pos);
@@ -174,36 +123,10 @@ private Q_SLOTS:
     void on_loadConfig_clicked();
     void on_saveConfig_clicked();
 
-    // Playbook
-    void on_loadPlaybook_clicked();
-    void on_savePlaybook_clicked();
-    void on_clearPlays_clicked();
-    void playIndicatorStatus(bool color);
-
-    // Fast Ref Buttons
-    void on_fastHalt_clicked();
-    void on_fastStop_clicked();
-    void on_fastReady_clicked();
-    void on_fastForceStart_clicked();
-    void on_fastKickoffBlue_clicked();
-    void on_fastKickoffYellow_clicked();
-    void on_fastDirectBlue_clicked();
-    void on_fastDirectYellow_clicked();
-    void on_fastIndirectBlue_clicked();
-    void on_fastIndirectYellow_clicked();
-
-Q_SIGNALS:
-    // signal used to let widgets that we're viewing a different log frame now
-    int historyLocationChanged(int value);
-
 private:
-    void updateStatus();
     void updateFromRefPacket(bool haveExternalReferee);
     static std::string formatLabelBold(Side side, std::string label);
 
-    typedef enum { Status_OK, Status_Warning, Status_Fail } StatusType;
-
-    void status(QString text, StatusType status);
     void updateRadioBaseStatus(bool usbRadio);
     void channel(int n);
 
@@ -239,10 +162,6 @@ private:
     // field view
     int _updateCount;
 
-    // Tracking fractional frames is the easiest way to allow arbitrary playback
-    // rates. To keep rounding consistent, only access this with frameNumber().
-    double _doubleFrameNumber;
-
     RJ::Time _lastUpdateTime;
 
     QLabel* _currentPlay;
@@ -257,10 +176,5 @@ private:
     // maps robot shell IDs to items in the list
     std::map<int, QListWidgetItem*> _robotStatusItemMap{};
 
-    /// the play, pause, ffwd, etc buttons
-    std::vector<QPushButton*> _logPlaybackButtons{};
-
-    std::vector<QComboBox*> _robotConfigQComboBoxes{};
-
-    std::vector<QComboBox*> _robotDebugResponseQComboBoxes{};
+    ControlBar* _control_bar;
 };

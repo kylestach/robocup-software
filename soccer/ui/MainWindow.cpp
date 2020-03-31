@@ -57,7 +57,8 @@ MainWindow::MainWindow(Processor* processor, QWidget* parent)
       _lastUpdateTime(RJ::now()),
       _history(2 * 60),
       _longHistory(10000),
-      _processor(processor) {
+      _processor(processor),
+      _control_bar(processor, this) {
     qRegisterMetaType<QVector<int>>("QVector<int>");
     _ui.setupUi(this);
     _ui.fieldView->history(&_history);
@@ -144,17 +145,6 @@ MainWindow::MainWindow(Processor* processor, QWidget* parent)
     styleGroup->addAction(_ui.actionDarculizedStyle);
     styleGroup->addAction(_ui.action1337h4x0rStyle);
     qActionGroups["styleGroup"] = styleGroup;
-
-    connect(_ui.manualID, SIGNAL(currentIndexChanged(int)), this,
-            SLOT(on_manualID_currentIndexChanged(int)));
-
-    // put all log playback buttons into a vector for easy access later
-    _logPlaybackButtons.push_back(_ui.logPlaybackRewind);
-    _logPlaybackButtons.push_back(_ui.logPlaybackPrevFrame);
-    _logPlaybackButtons.push_back(_ui.logPlaybackPause);
-    _logPlaybackButtons.push_back(_ui.logPlaybackNextFrame);
-    _logPlaybackButtons.push_back(_ui.logPlaybackPlay);
-    _logPlaybackButtons.push_back(_ui.logPlaybackLive);
 
     // Get the item model from the goalieID boxes so we can disable them
     // properly
@@ -482,26 +472,6 @@ void MainWindow::updateViews() {
                                        .arg(QString::number(frameNumber()))
                                        .arg(QString::number(frameNum)));
 
-        /*
-        // Update non-message tree items
-        _frameNumberItem->setData(ProtobufTree::Column_Value, Qt::DisplayRole,
-                                  frameNumber());
-        int elapsedMillis = (currentFrame->command_time() -
-                             RJ::timestamp(*_processor->firstLogTime)) /
-                            1000;
-
-        QTime elapsedTime = QTime::fromMSecsSinceStartOfDay(elapsedMillis);
-        _elapsedTimeItem->setText(ProtobufTree::Column_Value,
-                                  elapsedTime.toString("hh:mm:ss.zzz"));
-
-        // Sort the tree by tag if items have been added
-        if (_ui.logTree->message(*currentFrame)) {
-            // Items have been added, so sort again on tag number
-            _ui.logTree->sortItems(ProtobufTree::Column_Tag,
-                                   Qt::AscendingOrder);
-        }
-        */
-
         // update the behavior tree view
         QString behaviorStr =
             QString::fromStdString(currentFrame->behavior_tree());
@@ -604,50 +574,6 @@ void MainWindow::updateViews() {
                     robotModel = "Unknown Bot";
             }
             statusWidget->setRobotModel(robotModel);
-
-// uncomment this #define to test the display of a variety of
-// different errors #define DEMO_ROBOT_STATUS
-
-#ifdef DEMO_ROBOT_STATUS
-            // set board ID
-            QString hex("");
-            for (int i = 0; i < 4; i++)
-                hex += QString::number(rand() % 16, 16).toUpper();
-            statusWidget->setBoardID(hex);
-
-            // fake vision
-            bool vision = rand() % 5 != 0;
-            statusWidget->setHasVision(vision);
-
-            // fake battery
-            float battery = robot->shell() / 6.0f;
-            statusWidget->setBatteryLevel(battery);
-
-            // fake radio
-            bool radio = rand() % 5 != 0;
-            statusWidget->setHasRadio(radio);
-
-            // fake error text
-            QString error = "Kicker Fault, Motor Fault FR, Ball Sense Fault";
-            statusWidget->setErrorText(error);
-
-            // fake ball status
-            bool ball = rand() % 4 == 0;
-            statusWidget->setHasBall(ball);
-
-            // fake ball sense error
-            bool ballFault = rand() % 4 == 0;
-            statusWidget->setBallSenseFault(ballFault);
-            bool hasWheelFault = false;
-            if (rand() % 4 == 0) {
-                statusWidget->setWheelFault(rand() % 4);
-                hasWheelFault = true;
-            }
-
-            bool showstopper =
-                !vision || !radio || hasWheelFault || battery < 0.25;
-            statusWidget->setShowstopper(showstopper);
-#endif
         } else if (!shouldDisplay && displaying) {
             // remove the widget for this robot from the list
 
@@ -797,164 +723,6 @@ void MainWindow::updateViews() {
     updateTimer.start(20);
 }
 
-void MainWindow::updateStatus() {
-    // Guidelines:
-    //    Status_Fail is used for severe, usually external, errors such as
-    //    hardware or network failures.
-    //    Status_Warning is used for configuration problems that prevent
-    //    competition operation.
-    //        These can be easily changed within the soccer program.
-    //    Status_OK shall only be used for "COMPETITION".
-    //
-    // The order of these checks is important to help debugging.
-    // More specific or unlikely problems should be tested earlier.
-
-    if (!_processor) {
-        status("NO PROCESSOR", Status_Fail);
-        return;
-    }
-
-    if (_processor->gameplayModule()->checkPlaybookStatus()) {
-        playIndicatorStatus(false);
-    }
-
-    // Some conditions are different in simulation
-    bool sim = _processor->simulation();
-
-    if (!sim) {
-        updateRadioBaseStatus(_processor->isRadioOpen());
-    }
-
-    // Get processing thread status
-    Processor::Status ps = _processor->status();
-    RJ::Time curTime = RJ::now();
-
-    // Determine if we are receiving packets from an external referee
-    bool haveExternalReferee = (curTime - ps.lastRefereeTime) < RJ::Seconds(1);
-
-    std::vector<int> validIds = _processor->state()->ourValidIds();
-
-    for (int i = 1; i <= Num_Shells; i++) {
-        QStandardItem* item = goalieModel->item(i);
-        if (std::find(validIds.begin(), validIds.end(), i - 1) !=
-            validIds.end()) {
-            // The list starts with None so i is 1 higher than the shell id
-            item->setFlags(item->flags() |
-                           (Qt::ItemIsSelectable | Qt::ItemIsEnabled));
-        } else {
-            item->setFlags(item->flags() &
-                           ~(Qt::ItemIsSelectable | Qt::ItemIsEnabled));
-        }
-    }
-
-    if (haveExternalReferee && _autoExternalReferee) {
-        // External Ref is connected and should be used
-        _ui.fastHalt->setEnabled(false);
-        _ui.fastStop->setEnabled(false);
-        _ui.fastReady->setEnabled(false);
-        _ui.fastForceStart->setEnabled(false);
-        _ui.fastKickoffBlue->setEnabled(false);
-        _ui.fastKickoffYellow->setEnabled(false);
-        _ui.fastDirectBlue->setEnabled(false);
-    } else {
-        _ui.fastHalt->setEnabled(true);
-        _ui.fastStop->setEnabled(true);
-        _ui.fastReady->setEnabled(true);
-        _ui.fastForceStart->setEnabled(true);
-        _ui.fastKickoffBlue->setEnabled(true);
-        _ui.fastKickoffYellow->setEnabled(true);
-        _ui.fastDirectBlue->setEnabled(true);
-    }
-
-    updateFromRefPacket(haveExternalReferee);
-
-    // Is the processing thread running?
-    if (curTime - ps.lastLoopTime > RJ::Seconds(0.1)) {
-        // Processing loop hasn't run recently.
-        // Likely causes:
-        //    Mutex deadlock (need a recursive mutex?)
-        //    Excessive computation
-        status("PROCESSING HUNG", Status_Fail);
-        return;
-    }
-
-    // Check network activity
-    if (curTime - ps.lastVisionTime > RJ::Seconds(0.1)) {
-        // We must always have vision
-        status("NO VISION", Status_Fail);
-        return;
-    }
-
-    if (_processor->manualID() >= 0) {
-        // Mixed auto/manual control
-        status("MANUAL", Status_Warning);
-        return;
-    }
-
-    // Driving the robots helps isolate radio problems by verifying radio TX,
-    // so test this after manual driving.
-    if (curTime - ps.lastRadioRxTime > RJ::Seconds(1)) {
-        // Allow a long timeout in case of poor radio performance
-        status("NO RADIO RX", Status_Fail);
-        return;
-    }
-
-    if ((!sim || _processor->externalReferee()) && !haveExternalReferee) {
-        if (_autoExternalReferee && _processor->externalReferee()) {
-            // Automatically turn off external referee
-            //_ui.externalReferee->setChecked(false);
-        } else {
-            // In simulation, we will often run without a referee, so just make
-            // it a warning.
-            // There is a separate status for non-simulation with internal
-            // referee.
-            status("NO REFEREE", Status_Fail);
-            return;
-        }
-    }
-
-    if (sim) {
-        // Everything is good for simulation, but not for competition.
-        status("SIMULATION", Status_Warning);
-        return;
-    }
-
-    if (!sim && !_processor->externalReferee()) {
-        // Competition must use external referee
-        status("INTERNAL REF", Status_Warning);
-        return;
-    }
-
-    if (!sim && !_processor->logger().recording()) {
-        // We should record logs during competition
-        status("NOT RECORDING", Status_Warning);
-        return;
-    }
-
-    status("COMPETITION", Status_OK);
-}
-
-void MainWindow::status(QString text, MainWindow::StatusType status) {
-    // Assume that the status type alone won't change.
-    if (_ui.statusLabel->text() != text) {
-        _ui.statusLabel->setText(text);
-
-        switch (status) {
-            case Status_OK:
-                _ui.statusLabel->setStyleSheet("background-color: #00ff00");
-                break;
-
-            case Status_Warning:
-                _ui.statusLabel->setStyleSheet("background-color: #ffff00");
-                break;
-
-            case Status_Fail:
-                _ui.statusLabel->setStyleSheet("background-color: #ff4040");
-                break;
-        }
-    }
-}
-
 void MainWindow::playIndicatorStatus(bool color) {
     if (color) {
         _ui.playIndicatorStatus->setStyleSheet("background-color: #00ff00");
@@ -1030,17 +798,6 @@ void MainWindow::on_actionUseOpponentHalf_toggled(bool value) {
     _processor->useOpponentHalf(value);
 }
 
-void MainWindow::on_action916MHz_triggered() { channel(0); }
-
-void MainWindow::on_action918MHz_triggered() { channel(1); }
-
-void MainWindow::channel(int n) {
-    if (_processor && _processor->radio()) {
-        _processor->radio()->channel(n);
-    }
-    _ui.radioLabel->setText(QString("%1MHz").arg(916.0 + 0.2 * n, 0, 'f', 1));
-}
-
 // Simulator commands
 
 void MainWindow::on_actionCenterBall_triggered() {
@@ -1113,87 +870,6 @@ void MainWindow::on_actionResetField_triggered() {
     ball_replace->mutable_vel()->set_y(0.0);
 
     _processor->context()->grsim_command = simPacket;
-}
-
-void MainWindow::on_actionStopRobots_triggered() {
-    // TODO: check that this handles threads properly
-    /*
-    for (OurRobot* robot : state()->self) {
-        if (robot->visible) {
-            SimCommand::Robot* r = cmd.add_robots();
-            r->set_shell(robot->shell());
-            r->set_blue_team(_processor->blueTeam());
-            Geometry2d::Point newPos =
-                _ui.fieldView->getTeamToWorld() * robot->pos;
-            r->mutable_pos()->set_x(newPos.x());
-            r->mutable_pos()->set_y(newPos.y());
-            r->mutable_vel()->set_x(0);
-            r->mutable_vel()->set_y(0);
-            r->set_w(0);
-        }
-    }
-    for (OpponentRobot* robot : state()->opp) {
-        if (robot->visible) {
-            SimCommand::Robot* r = cmd.add_robots();
-            r->set_shell(robot->shell());
-            r->set_blue_team(!_processor->isBlueTeam());
-            Geometry2d::Point newPos =
-                _ui.fieldView->getTeamToWorld() * robot->pos;
-            r->mutable_pos()->set_x(newPos.x());
-            r->mutable_pos()->set_y(newPos.y());
-            r->mutable_vel()->set_x(0);
-            r->mutable_vel()->set_y(0);
-            r->set_w(0);
-        }
-    }
-    */
-    //_ui.fieldView->sendSimCommand(cmd);
-}
-
-void MainWindow::on_actionQuicksaveRobotLocations_triggered() {
-    /*
-    _ui.actionQuickloadRobotLocations->setEnabled(true);
-    _quickLoadCmd.reset();
-    for (OurRobot* robot : state()->self) {
-        if (robot->visible) {
-            SimCommand::Robot* r = _quickLoadCmd.add_robots();
-            r->set_shell(robot->shell());
-            r->set_blue_team(_processor->blueTeam());
-            Geometry2d::Point newPos =
-                _ui.fieldView->getTeamToWorld() * robot->pos;
-            r->mutable_pos()->set_x(newPos.x());
-            r->mutable_pos()->set_y(newPos.y());
-            r->mutable_vel()->set_x(0);
-            r->mutable_vel()->set_y(0);
-            r->set_w(0);
-        }
-    }
-    for (OpponentRobot* robot : state()->opp) {
-        if (robot->visible) {
-            SimCommand::Robot* r = _quickLoadCmd.add_robots();
-            r->set_shell(robot->shell());
-            r->set_blue_team(!_processor->isBlueTeam());
-            Geometry2d::Point newPos =
-                _ui.fieldView->getTeamToWorld() * robot->pos;
-            r->mutable_pos()->set_x(newPos.x());
-            r->mutable_pos()->set_y(newPos.y());
-            r->mutable_vel()->set_x(0);
-            r->mutable_vel()->set_y(0);
-            r->set_w(0);
-        }
-    }
-
-    Geometry2d::Point ballPos =
-        _ui.fieldView->getTeamToWorld() * state()->ball.pos;
-    _quickLoadCmd.mutable_ball_pos()->set_x(ballPos.x());
-    _quickLoadCmd.mutable_ball_pos()->set_y(ballPos.y());
-    _quickLoadCmd.mutable_ball_vel()->set_x(0);
-    _quickLoadCmd.mutable_ball_vel()->set_y(0);
-    */
-}
-
-void MainWindow::on_actionQuickloadRobotLocations_triggered() {
-    //_ui.fieldView->sendSimCommand(_quickLoadCmd);
 }
 
 // Style Sheets
@@ -1284,57 +960,6 @@ void MainWindow::on_joystickKickOnBreakBeam_stateChanged() {
 
 // choose between kick on break beam and immeditate
 
-// Log controls
-void MainWindow::on_logHistoryLocation_sliderMoved(int value) {
-    // Sync frameNumber with logHistory slider
-    _doubleFrameNumber = value;
-
-    // pause playback
-    setPlayBackRate(0);
-}
-
-void MainWindow::on_logHistoryLocation_sliderPressed() {
-    on_logHistoryLocation_sliderMoved(_ui.logHistoryLocation->value());
-}
-
-void MainWindow::on_logHistoryLocation_sliderReleased() {
-    on_logHistoryLocation_sliderPressed();
-}
-
-void MainWindow::on_logPlaybackRewind_clicked() {
-    if (live()) {
-        setPlayBackRate(-1);
-    } else {
-        *_playbackRate += -0.5;
-    }
-}
-
-void MainWindow::on_logPlaybackPrevFrame_clicked() {
-    setPlayBackRate(0);
-    _doubleFrameNumber -= 1;
-}
-
-void MainWindow::on_logPlaybackPause_clicked() {
-    if (live() || std::abs(*_playbackRate) > 0.1) {
-        setPlayBackRate(0);
-    } else {
-        setPlayBackRate(1);
-    }
-}
-
-void MainWindow::on_logPlaybackNextFrame_clicked() {
-    setPlayBackRate(0);
-    _doubleFrameNumber += 1;
-}
-
-void MainWindow::on_logPlaybackPlay_clicked() {
-    if (!live()) {
-        *_playbackRate += 0.5;
-    }
-}
-
-void MainWindow::on_logPlaybackLive_clicked() { setLive(); }
-
 void MainWindow::on_actionTeamBlue_triggered() {
     _ui.team->setText("BLUE");
     _ui.team->setStyleSheet("background-color: #4040ff; color: #ffffff");
@@ -1347,10 +972,6 @@ void MainWindow::on_actionTeamYellow_triggered() {
     _processor->blueTeam(false);
 }
 
-void MainWindow::on_manualID_currentIndexChanged(int value) {
-    _processor->manualID(value - 1);
-}
-
 void MainWindow::on_actionUse_Field_Oriented_Controls_toggled(bool value) {
     _processor->setUseFieldOrientedManualDrive(value);
 }
@@ -1360,17 +981,10 @@ void MainWindow::on_actionUse_Multiple_Joysticks_toggled(bool value) {
     _processor->setupJoysticks();
 }
 
-void MainWindow::on_goalieID_currentIndexChanged(int value) {
-    _processor->goalieID(value - 1);
-}
-
 void MainWindow::on_actionUse_External_Referee_toggled(bool value) {
     _autoExternalReferee = value;
     _processor->externalReferee(value);
 }
-
-////////////////
-// Tab Widget Section
 
 ////////
 // Debug layer list
@@ -1499,65 +1113,8 @@ void MainWindow::on_testNext_clicked() {
     _processor->gameplayModule()->nextTest();
 }
 
-void MainWindow::setRadioChannel(RadioChannels channel) {
-    switch (channel) {
-        case RadioChannels::MHz_916:
-            this->on_action916MHz_triggered();
-            break;
-        case RadioChannels::MHz_918:
-            this->on_action918MHz_triggered();
-            break;
-    }
-}
-
 void MainWindow::setUseRefChecked(bool use_ref) {
     _ui.actionUse_Field_Oriented_Controls->setChecked(false);
-}
-
-void MainWindow::on_fastHalt_clicked() {
-    _processor->refereeModule()->command_ = RefereeModuleEnums::HALT;
-}
-
-void MainWindow::on_fastStop_clicked() {
-    _processor->refereeModule()->command_ = RefereeModuleEnums::STOP;
-}
-
-void MainWindow::on_fastReady_clicked() {
-    _processor->refereeModule()->command_ = RefereeModuleEnums::NORMAL_START;
-}
-
-void MainWindow::on_fastForceStart_clicked() {
-    _processor->refereeModule()->command_ = RefereeModuleEnums::FORCE_START;
-}
-
-void MainWindow::on_fastKickoffBlue_clicked() {
-    _processor->refereeModule()->command_ =
-        RefereeModuleEnums::PREPARE_KICKOFF_BLUE;
-}
-
-void MainWindow::on_fastKickoffYellow_clicked() {
-    _processor->refereeModule()->command_ =
-        RefereeModuleEnums::PREPARE_KICKOFF_YELLOW;
-}
-
-void MainWindow::on_fastDirectBlue_clicked() {
-    _processor->refereeModule()->command_ =
-        RefereeModuleEnums::DIRECT_FREE_BLUE;
-}
-
-void MainWindow::on_fastDirectYellow_clicked() {
-    _processor->refereeModule()->command_ =
-        RefereeModuleEnums::DIRECT_FREE_YELLOW;
-}
-
-void MainWindow::on_fastIndirectBlue_clicked() {
-    _processor->refereeModule()->command_ =
-        RefereeModuleEnums::INDIRECT_FREE_BLUE;
-}
-
-void MainWindow::on_fastIndirectYellow_clicked() {
-    _processor->refereeModule()->command_ =
-        RefereeModuleEnums::INDIRECT_FREE_YELLOW;
 }
 
 void MainWindow::on_actionVisionPrimary_Half_triggered() {
@@ -1574,5 +1131,3 @@ void MainWindow::on_actionVisionFull_Field_triggered() {
     _processor->changeVisionChannel(SharedVisionPortDoubleNew);
     _processor->setFieldDimensions(Field_Dimensions::Double_Field_Dimensions);
 }
-
-bool MainWindow::live() { return !_playbackRate; }
