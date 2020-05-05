@@ -147,14 +147,11 @@ void FieldView::paintEvent(QPaintEvent* e) {
     _screenToWorld *=
         Geometry2d::TransformMatrix::translate(-width() / 2.0, -height() / 2.0);
 
-    _worldToTeam = Geometry2d::TransformMatrix();
-    _worldToTeam *= Geometry2d::TransformMatrix::translate(
-        0, Field_Dimensions::Current_Dimensions.Length() / 2.0f);
-    if (frame->defend_plus_x()) {
-        _worldToTeam *= Geometry2d::TransformMatrix::rotate(-M_PI / 2.0);
-    } else {
-        _worldToTeam *= Geometry2d::TransformMatrix::rotate(M_PI / 2.0);
-    }
+    // TODO(Kyle): Verify that this is accessed properly. It should be fine,
+    // as it gets written from the UI thread and so reading from the UI thread
+    // should always give good results.
+    _worldToTeam = _context->game_settings.dimensions.WorldToTeam(
+            _context->game_settings.defendPlusX);
 
     _teamToWorld = Geometry2d::TransformMatrix();
     if (frame->defend_plus_x()) {
@@ -748,3 +745,5 @@ void FieldView::resizeEvent(QResizeEvent* e) {
     }
     e->accept();
 }
+
+void FieldView::setContext(Context* context) { this->_context = context; }

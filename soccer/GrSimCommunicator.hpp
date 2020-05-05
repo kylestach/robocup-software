@@ -1,6 +1,3 @@
-// An extension of FieldView that generates SimCommands in response
-// to clicks/drags when live.
-
 #pragma once
 
 #include <protobuf/grSim_Commands.pb.h>
@@ -8,7 +5,7 @@
 #include <protobuf/grSim_Replacement.pb.h>
 
 #include <Geometry2d/TransformMatrix.hpp>
-#include <QUdpSocket>
+#include <boost/asio.hpp>
 
 #include <Context.hpp>
 #include <Node.hpp>
@@ -26,5 +23,6 @@ public:
 
 private:
     Context* _context;
-    QUdpSocket _simCommandSocket;
+    boost::asio::io_service _io_service;
+    boost::asio::ip::udp::socket _socket;
 };

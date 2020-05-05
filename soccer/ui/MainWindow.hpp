@@ -17,8 +17,6 @@ class TestResultTab;
 class StripChart;
 class ConfigBool;
 
-enum RadioChannels { MHz_916, MHz_918 };
-
 namespace {
 // Style sheets used for live/non-live controls
 QString LiveStyle("border:2px solid transparent");
@@ -33,7 +31,8 @@ class MainWindow : public QMainWindow {
     Q_OBJECT;
 
 public:
-    MainWindow(Processor* processor, Context* context, QWidget* parent = nullptr);
+    MainWindow(Processor* processor, Context* context,
+               QMutex* loopMutex, QWidget* parent = nullptr);
 
     void configuration(Configuration* config);
 
@@ -72,8 +71,6 @@ public:
     // Call this to update the status bar when the log file has changed
     void logFileChanged();
 
-    void setRadioChannel(RadioChannels channel);
-
     QTimer updateTimer;
 
     void setUseRefChecked(bool use_ref);
@@ -109,10 +106,6 @@ private Q_SLOTS:
     void on_action90_triggered();
     void on_action180_triggered();
     void on_action270_triggered();
-
-    /// Radio channels
-    void on_action916MHz_triggered();
-    void on_action918MHz_triggered();
 
     /// Vision port
     void on_actionVisionPrimary_Half_triggered();
@@ -205,7 +198,6 @@ private:
 
     void status(QString text, StatusType status);
     void updateRadioBaseStatus(bool usbRadio);
-    void channel(int n);
 
     Ui_MainWindow _ui;
     const QStandardItemModel* goalieModel;
@@ -226,7 +218,7 @@ private:
     // When true, External Referee is automatically set.
     // This is cleared by manually changing the checkbox or after the
     // first referee packet is seen and the box is automatically checked.
-    bool _autoExternalReferee;
+    bool _usingExternalRef = false;
 
     // Tree items that are not in LogFrame
     QTreeWidgetItem* _frameNumberItem;
@@ -254,11 +246,11 @@ private:
     // Locked when processing loop stuff is happening (not when blocked for
     // timing or I/O). This is public so the GUI thread can lock it to access
     // SystemState, etc.
-    QMutex _loopMutex;
+    QMutex* _loopMutex;
 
     Context* _context;
 
-    GameSettings _settings_copy{true, true, true, true, -1, -1, false, 0, true, true, false, true, false};
+    GameSettings _settings{};
 
     // QActionGroups for Radio Menu Actions
     std::map<std::string, QActionGroup*> qActionGroups{};

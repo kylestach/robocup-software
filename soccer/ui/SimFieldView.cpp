@@ -19,8 +19,6 @@ SimFieldView::SimFieldView(QWidget* parent) : FieldView(parent) {
     _dragRobotBlue = false;
 }
 
-void SimFieldView::setContext(Context* context) { this->_context = context; }
-
 void SimFieldView::mousePressEvent(QMouseEvent* me) {
     // Ignore mouse events in the field if not in sim
     if (!_context->game_settings.simulation) {

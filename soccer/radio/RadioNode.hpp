@@ -12,11 +12,10 @@ public:
     RJ::Time getLastRadioRxTime();
     Radio* getRadio();
     void run() override;
-    void switchTeam(bool blueTeam);
 
 private:
     Context* _context;
     RJ::Time _lastRadioRxTime;
     Radio* _radio;
-    bool _simulation;
+    bool _was_blue;
 };

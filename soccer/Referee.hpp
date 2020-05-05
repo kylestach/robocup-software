@@ -18,8 +18,6 @@
 #include "SystemState.hpp"
 #include "TeamInfo.hpp"
 
-class QUdpSocket;
-
 /**
  * @brief A packet we received over the network from ssl-refbox
  *
@@ -65,12 +63,6 @@ public:
     void getPackets(std::vector<RefereePacket>& packets);
 
     [[nodiscard]] bool kicked() const { return _kickDetectState == Kicked; }
-
-    void useExternalReferee(bool value) {
-        _useExternalRef = value;
-    }
-
-    [[nodiscard]] bool useExternalReferee() const { return _useExternalRef; }
 
     /**
      * Set the team color only if it is not already being controlled by the
@@ -148,8 +140,6 @@ protected:
 
     RefereeModuleEnums::Command prev_command_;
     RefereeModuleEnums::Stage prev_stage_;
-
-    bool _useExternalRef = false;
 
     // Whether or not WE are currently controlled by the ref. This is not the
     // same as whether the referee is connected, because it will still be false

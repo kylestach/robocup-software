@@ -1,8 +1,5 @@
 #include "VisionReceiver.hpp"
 
-#include <unistd.h>
-#include <QMutexLocker>
-#include <QUdpSocket>
 #include <Utils.hpp>
 #include <multicast.hpp>
 #include <stdexcept>
@@ -57,6 +54,10 @@ void VisionReceiver::setPort(int port) {
 }
 
 void VisionReceiver::run() {
+    if (port != _context->game_settings.visionChannel) {
+        setPort(_context->game_settings.visionChannel);
+    }
+
     // Let boost::asio check for new packets
     _io_context.poll();
 
@@ -136,8 +137,8 @@ void VisionReceiver::receivePacket(const boost::system::error_code& error,
                                    std::size_t num_bytes) {
     // Check for error
     if (error) {
-        std::cerr << "Vision receive failed with error: " << error.message()
-                  << std::endl;
+//        std::cerr << "Vision receive failed with error: " << error.message()
+//                  << std::endl;
         return;
     }
 

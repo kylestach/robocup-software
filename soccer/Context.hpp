@@ -32,6 +32,9 @@ struct Context {
     std::array<RobotStatus, Num_Shells> robot_status;
     std::array<RobotConstraints, Num_Shells> robot_constraints;
 
+    // Published by joystick code, whether or not there is a joystick.
+    bool has_joystick_available;
+
     std::array<bool, Num_Shells> is_joystick_controlled;
 
     std::unique_ptr<RobotConfig> robot_config;
@@ -39,6 +42,8 @@ struct Context {
     SystemState state;
     GameState game_state;
     DebugDrawer debug_drawer;
+
+    bool using_external_referee;
 
     std::vector<std::unique_ptr<VisionPacket>> vision_packets;
     WorldState world_state;

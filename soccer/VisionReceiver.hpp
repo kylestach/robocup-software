@@ -26,23 +26,15 @@
 class VisionReceiver : public Node {
 public:
     explicit VisionReceiver(Context* context, bool sim = false,
-                            int port = SharedVisionPortSinglePrimary);
-
-    /// Copies the vector of packets and then clears it. The vector contains
-    /// only packets received since the last time this was called (or since the
-    /// VisionReceiver was started, if getPackets has never been called).
-    ///
-    /// The caller is responsible for freeing the packets after this function
-    /// returns.
-    void getPackets(std::vector<VisionPacket*>& packets);
+                            int port = SharedVisionPort);
 
     virtual void run() override;
-
-    void setPort(int port);
 
     RJ::Time getLastVisionTime() const { return _last_receive_time; }
 
 protected:
+    void setPort(int port);
+
     int port;
 
     void startReceive();

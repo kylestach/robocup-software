@@ -39,22 +39,11 @@ static const int SimYellowStatusPort = 30012;
 static const int LegacyRefereePort = 10001;
 static const int ProtobufRefereePort = 10003;
 
-// Kept around for legacy code
+// This is actually the legacy protocol, but we still use it.
+// TODO(Kyle) transition over to the new protocol on 10006.
 static const int SharedVisionPort = 10002;
 
-// Primary Single-sized field port with old Protobuf protocol
-static const int SharedVisionPortSinglePrimary = 10002;
-
-// Secondary Single-sized field port with old Protobuf protocol
-static const int SharedVisionPortSingleSecondary = 10004;
 
 static constexpr int NetworkRadioServerPort = 25565;
-
-// Double-sized field port with old Protobuf protocol
-// static const int SharedVisionPortDoubleOld = 10005;
-
-// Double-sized field port with new Protobuf protocol
-static const int SharedVisionPortDoubleNew = 10006;
-
 static const int RadioRxPort = 12000;
 static const int RadioTxPort = 13000;

@@ -56,6 +56,8 @@ public:
     bool showDotPatterns;
     bool showTeamNames;
 
+    void setContext(Context* context);
+
 protected:
     virtual void paintEvent(QPaintEvent* e) override;
     virtual void resizeEvent(QResizeEvent* e) override;
@@ -72,7 +74,6 @@ protected:
                    float theta, bool hasBall = false, bool faulty = false);
     void drawCoords(QPainter& p);
 
-protected:
     // Returns a pointer to the most recent frame, or null if none is available.
     std::shared_ptr<Packet::LogFrame> currentFrame();
 
@@ -94,6 +95,5 @@ protected:
 
     QVector<bool> _layerVisible;
 
-private:
     Context* _context;
 };

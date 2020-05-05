@@ -15,7 +15,6 @@ class SimFieldView : public FieldView {
 
 public:
     SimFieldView(QWidget* parent = nullptr);
-    void setContext(Context* context);
 
 Q_SIGNALS:
     // Emitted when the user selects a robot.
@@ -39,5 +38,4 @@ private:
     int _dragRobotBlue;
     Geometry2d::Point _dragTo;
     Geometry2d::Point _shot;
-    Context* _context;
 };

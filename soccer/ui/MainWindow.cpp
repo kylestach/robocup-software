@@ -49,15 +49,16 @@ void calcMinimumWidth(QWidget* widget, QString text) {
     widget->setMinimumWidth(rect.width());
 }
 
-MainWindow::MainWindow(Processor* processor,Context* context, QWidget* parent)
+MainWindow::MainWindow(Processor* processor, Context* context,
+                       QMutex* loopMutex, QWidget* parent)
     : QMainWindow(parent),
       _updateCount(0),
-      _autoExternalReferee(true),
       _doubleFrameNumber(-1),
       _lastUpdateTime(RJ::now()),
       _history(2 * 60),
       _longHistory(10000),
       _processor(processor),
+      _loopMutex(loopMutex),
       _context(context) {
     qRegisterMetaType<QVector<int>>("QVector<int>");
     _ui.setupUi(this);
@@ -169,14 +170,14 @@ MainWindow::MainWindow(Processor* processor,Context* context, QWidget* parent)
 
     // Pass context into fieldview
     // (apparently simfieldview is used even outside of simulation)
-    _ui.fieldView->setContext(_processor->context());
+    _ui.fieldView->setContext(_context);
 
-    if (!_processor->simulation()) {
-        _ui.menu_Simulator->setEnabled(false);
-    } else {
+    if (_settings.simulation) {
         // reset the field initially, grSim will start out in some weird
         // pattern and we want to keep it consistent
         on_actionResetField_triggered();
+    } else {
+        _ui.menu_Simulator->setEnabled(false);
     }
 
     // disabled because of lack of grSim support
@@ -193,7 +194,7 @@ void MainWindow::configuration(Configuration* config) {
 
 void MainWindow::initialize() {
     // Team
-    if (_context->game_settings.requestedBlueTeam) {
+    if (_settings.requestedBlueTeam) {
         _ui.actionTeamBlue->trigger();
     } else {
         _ui.actionTeamYellow->trigger();
@@ -212,14 +213,12 @@ void MainWindow::initialize() {
     qActionGroups["radioGroup"]->checkedAction()->trigger();
 
     // Default to FullField on Simulator
-    if (_context->game_settings.simulation) {
+    if (_settings.simulation) {
         _ui.actionVisionFull_Field->trigger();
     }
     updateTimer.setSingleShot(true);
     connect(&updateTimer, SIGNAL(timeout()), SLOT(updateViews()));
     updateTimer.start(30);
-
-    _autoExternalReferee = _processor->externalReferee();
 
     if (_context->game_state.defendPlusX) {
         on_actionDefendPlusX_triggered();
@@ -228,7 +227,7 @@ void MainWindow::initialize() {
         on_actionDefendMinusX_triggered();
         _ui.actionDefendMinusX->setChecked(true);
     }
-    switch (_context->game_settings.visionChannel) {
+    switch (_settings.visionChannel) {
         case 0:
             on_actionVisionPrimary_Half_triggered();
             _ui.actionVisionPrimary_Half->setChecked(true);
@@ -286,13 +285,13 @@ void MainWindow::updateFromRefPacket(bool haveExternalReferee) {
 
         // Changes the goalie INDEX which is 1 higher than the goalie ID
         if (_ui.goalieID->currentIndex() !=
-            _settings_copy.goalieID + 1) {
+            _settings.goalieID + 1) {
             _ui.goalieID->setCurrentIndex(
-                _settings_copy.goalieID + 1);
+                _settings.goalieID + 1);
         }
 
         bool blueTeam = _processor->refereeModule()->isBlueTeam();
-        if (_context->game_settings.requestedBlueTeam != blueTeam) {
+        if (_settings.requestedBlueTeam != blueTeam) {
             blueTeam ? _ui.actionTeamBlue->trigger()
                      : _ui.actionTeamYellow->trigger();
         }
@@ -303,16 +302,18 @@ void MainWindow::updateFromRefPacket(bool haveExternalReferee) {
 }
 
 void MainWindow::updateViews() {
-    int manual = _settings_copy.manualID;
-    if ((manual >= 0 || _ui.manualID->isEnabled()) &&
-        !_processor->joystickValid()) {
+    // TODO(Kyle): Re-enable the joystick tab. It's not worth fixing right now
+    // as joysticks are getting a rewrite coming up.
+#if 0
+    int manual = _settings.manualID;
+    if (!_context->has_joystick_available) {
         // Joystick is gone - turn off manual control
         _ui.manualID->setCurrentIndex(0);
-        _settings_copy.manualID = -1;
+        _settings.manualID = -1;
         _ui.manualID->setEnabled(false);
         _ui.tabWidget->setTabEnabled(_ui.tabWidget->indexOf(_ui.joystickTab),
                                      false);
-    } else if (!_ui.manualID->isEnabled() && _processor->joystickValid()) {
+    } else {
         // Joystick reconnected
         _ui.manualID->setEnabled(true);
         _ui.joystickTab->setVisible(true);
@@ -320,17 +321,8 @@ void MainWindow::updateViews() {
                                      true);
     }
 
-    if (_processor->multipleManual() && manual < 0) {
-        _ui.tabWidget->setTabEnabled(_ui.tabWidget->indexOf(_ui.joystickTab),
-                                     false);
-    } else {
-        _ui.tabWidget->setTabEnabled(_ui.tabWidget->indexOf(_ui.joystickTab),
-                                     true);
-    }
-
     if (manual >= 0) {
         int index = 0;
-        std::vector<int> manualIds = _processor->getJoystickRobotIds();
         auto info = std::find(manualIds.begin(), manualIds.end(), manual);
         if (info != manualIds.end()) {
             index = info - manualIds.begin();
@@ -350,6 +342,7 @@ void MainWindow::updateViews() {
             _ui.joystickDribblerCheckBox->setChecked(vals.dribble);
         }
     }
+#endif
 
     // Time since last update
     RJ::Time now = RJ::now();
@@ -363,7 +356,7 @@ void MainWindow::updateViews() {
 
         _viewFPS->setText(QString("View: %1 fps").arg(framerate, 0, 'f', 1));
         _procFPS->setText(
-            QString("Proc: %1 fps").arg(_settings_copy.framerate, 0, 'f', 1));
+            QString("Proc: %1 fps").arg(_settings.framerate, 0, 'f', 1));
 
         // TODO: Use constants here instead of magic numbers
         _logMemory->setText(
@@ -432,7 +425,7 @@ void MainWindow::updateViews() {
     // Update status indicator
     updateStatus();
 
-    _settings_copy.paused = !live();
+    _settings.paused = !live();
 
     // Check if any debug layers have been added
     // (layers should never be removed)
@@ -555,9 +548,6 @@ void MainWindow::updateViews() {
     _ui.refYellowGoalie->setText(
         tr("%1").arg(_processor->refereeModule()->yellow_info.goalie));
 
-    _ui.actionUse_External_Referee->setChecked(
-        _processor->refereeModule()->useExternalReferee());
-
     // update robot status list
     for (const OurRobot* robot : _processor->state()->self) {
         // a robot shows up in the status list if it's reachable via radio
@@ -582,7 +572,7 @@ void MainWindow::updateViews() {
             statusWidget->setShellID(robot->shell());
 
             // set team
-            statusWidget->setBlueTeam(_settings_copy.requestedBlueTeam);
+            statusWidget->setBlueTeam(_settings.requestedBlueTeam);
 
             // TODO: set board ID
 
@@ -793,8 +783,8 @@ void MainWindow::updateViews() {
     // order to guarantee a minimum time between redraws.  This will limit the
     // CPU usage on a fast computer.
     updateTimer.start(20);
-    QMutexLocker locker(&_loopMutex);
-    _context->game_settings = _settings_copy;
+    QMutexLocker locker(_loopMutex);
+    _context->game_settings = _settings;
 }
 
 void MainWindow::updateStatus() {
@@ -819,10 +809,11 @@ void MainWindow::updateStatus() {
     }
 
     // Some conditions are different in simulation
-    bool sim = _settings_copy.simulation;
+    bool sim = _settings.simulation;
 
     if (!sim) {
-        updateRadioBaseStatus(_processor->isRadioOpen());
+        // TODO(Kyle): Actually display whether radio is working.
+        updateRadioBaseStatus(true);
     }
 
     // Get processing thread status
@@ -847,7 +838,7 @@ void MainWindow::updateStatus() {
         }
     }
 
-    if (haveExternalReferee && _autoExternalReferee) {
+    if (_usingExternalRef) {
         // External Ref is connected and should be used
         _ui.fastHalt->setEnabled(false);
         _ui.fastStop->setEnabled(false);
@@ -885,7 +876,7 @@ void MainWindow::updateStatus() {
         return;
     }
 
-    if (_settings_copy.manualID >= 0) {
+    if (_settings.manualID >= 0) {
         // Mixed auto/manual control
         status("MANUAL", Status_Warning);
         return;
@@ -899,29 +890,17 @@ void MainWindow::updateStatus() {
         return;
     }
 
-    if ((!sim || _processor->externalReferee()) && !haveExternalReferee) {
-        if (_autoExternalReferee && _processor->externalReferee()) {
-            // Automatically turn off external referee
-            //_ui.externalReferee->setChecked(false);
-        } else {
-            // In simulation, we will often run without a referee, so just make
-            // it a warning.
-            // There is a separate status for non-simulation with internal
-            // referee.
-            status("NO REFEREE", Status_Fail);
-            return;
-        }
+    if (!sim && !_usingExternalRef && _settings.allowExternalReferee) {
+        // In simulation, we will often run without a referee.
+        // However, when we're requesting referee (not in sim) and not
+        // getting it, it's a warning.
+        status("NO REFEREE", Status_Warning);
+        return;
     }
 
     if (sim) {
         // Everything is good for simulation, but not for competition.
         status("SIMULATION", Status_Warning);
-        return;
-    }
-
-    if (!sim && !_processor->externalReferee()) {
-        // Competition must use external referee
-        status("INTERNAL REF", Status_Warning);
         return;
     }
 
@@ -975,9 +954,9 @@ void MainWindow::updateRadioBaseStatus(bool usbRadio) {
 }
 
 void MainWindow::on_fieldView_robotSelected(int shell) {
-    if (_processor->joystickValid()) {
+    if (_context->has_joystick_available) {
         _ui.manualID->setCurrentIndex(shell + 1);
-        _settings_copy.manualID = shell;
+        _settings.manualID = shell;
     }
 }
 
@@ -1007,11 +986,11 @@ void MainWindow::on_actionTeam_Names_toggled(bool state) {
 }
 
 void MainWindow::on_actionDefendMinusX_triggered() {
-    _context->game_state.defendPlusX = false;
+    _settings.defendPlusX = false;
 }
 
 void MainWindow::on_actionDefendPlusX_triggered() {
-    _context->game_state.defendPlusX = true;
+    _settings.defendPlusX = true;
 }
 
 void MainWindow::on_action0_triggered() { _ui.fieldView->rotate(0); }
@@ -1023,22 +1002,11 @@ void MainWindow::on_action180_triggered() { _ui.fieldView->rotate(2); }
 void MainWindow::on_action270_triggered() { _ui.fieldView->rotate(3); }
 
 void MainWindow::on_actionUseOurHalf_toggled(bool value) {
-    _settings_copy.useOurHalf = value;
+    _settings.useOurHalf = value;
 }
 
 void MainWindow::on_actionUseOpponentHalf_toggled(bool value) {
-    _settings_copy.useOpponentHalf = value;
-}
-
-void MainWindow::on_action916MHz_triggered() { channel(0); }
-
-void MainWindow::on_action918MHz_triggered() { channel(1); }
-
-void MainWindow::channel(int n) {
-    if (_processor && _processor->radio()) {
-        _processor->radio()->channel(n);
-    }
-    _ui.radioLabel->setText(QString("%1MHz").arg(916.0 + 0.2 * n, 0, 'f', 1));
+    _settings.useOpponentHalf = value;
 }
 
 // Simulator commands
@@ -1224,7 +1192,7 @@ void MainWindow::on_actionDampedRotation_toggled(bool value) {
         cout << "Enabled" << endl;
     else
         cout << "Disabled" << endl;
-    _settings_copy.dampedRotation = value;
+    _settings.dampedRotation = value;
 }
 
 void MainWindow::on_actionDampedTranslation_toggled(bool value) {
@@ -1233,7 +1201,7 @@ void MainWindow::on_actionDampedTranslation_toggled(bool value) {
         cout << "Enabled" << endl;
     else
         cout << "Disabled" << endl;
-    _settings_copy.dampedTranslation = value;
+    _settings.dampedTranslation = value;
 }
 
 void MainWindow::on_actionRestartUpdateTimer_triggered() {
@@ -1278,7 +1246,7 @@ void MainWindow::on_actionSeed_triggered() {
 
 // Joystick settings
 void MainWindow::on_joystickKickOnBreakBeam_stateChanged() {
-    _settings_copy.kickOnBreakBeam = _ui.joystickKickOnBreakBeam->checkState();
+    _settings.kickOnBreakBeam = _ui.joystickKickOnBreakBeam->checkState();
 }
 
 // choose between kick on break beam and immeditate
@@ -1337,35 +1305,33 @@ void MainWindow::on_logPlaybackLive_clicked() { setLive(); }
 void MainWindow::on_actionTeamBlue_triggered() {
     _ui.team->setText("BLUE");
     _ui.team->setStyleSheet("background-color: #4040ff; color: #ffffff");
-    _processor->blueTeam(true);
+    _settings.requestedBlueTeam = true;
 }
 
 void MainWindow::on_actionTeamYellow_triggered() {
     _ui.team->setText("YELLOW");
     _ui.team->setStyleSheet("background-color: #ffff00");
-    _processor->blueTeam(false);
+    _settings.requestedBlueTeam = false;
 }
 
 void MainWindow::on_manualID_currentIndexChanged(int value) {
-    _settings_copy.manualID = value - 1;
+    _settings.manualID = value;
 }
 
 void MainWindow::on_actionUse_Field_Oriented_Controls_toggled(bool value) {
-    _settings_copy.useFieldOrientedManualDrive = value;
+    _settings.useFieldOrientedManualDrive = value;
 }
 
 void MainWindow::on_actionUse_Multiple_Joysticks_toggled(bool value) {
-    _settings_copy.multipleManual = value;
-    _processor->setupJoysticks();
+    // TODO(Kyle, Wei-Xiong): Rewrite multiple manual.
 }
 
 void MainWindow::on_goalieID_currentIndexChanged(int value) {
-    _settings_copy.goalieID = value - 1;
+    _settings.goalieID = value - 1;
 }
 
 void MainWindow::on_actionUse_External_Referee_toggled(bool value) {
-    _autoExternalReferee = value;
-    _processor->externalReferee(value);
+    _settings.allowExternalReferee = value;
 }
 
 ////////////////
@@ -1498,17 +1464,6 @@ void MainWindow::on_testNext_clicked() {
     _processor->gameplayModule()->nextTest();
 }
 
-void MainWindow::setRadioChannel(RadioChannels channel) {
-    switch (channel) {
-        case RadioChannels::MHz_916:
-            this->on_action916MHz_triggered();
-            break;
-        case RadioChannels::MHz_918:
-            this->on_action918MHz_triggered();
-            break;
-    }
-}
-
 void MainWindow::setUseRefChecked(bool use_ref) {
     _ui.actionUse_Field_Oriented_Controls->setChecked(false);
 }
@@ -1560,18 +1515,18 @@ void MainWindow::on_fastIndirectYellow_clicked() {
 }
 
 void MainWindow::on_actionVisionPrimary_Half_triggered() {
-    _processor->changeVisionChannel(SharedVisionPortSinglePrimary);
-    _processor->setFieldDimensions(Field_Dimensions::Single_Field_Dimensions);
+;   _settings.visionChannel = SharedVisionPort;
+    _settings.dimensions = Field_Dimensions::Single_Field_Dimensions;
 }
 
 void MainWindow::on_actionVisionSecondary_Half_triggered() {
-    _processor->changeVisionChannel(SharedVisionPortSinglePrimary);
-    _processor->setFieldDimensions(Field_Dimensions::Single_Field_Dimensions);
+    _settings.visionChannel = SharedVisionPort;
+    _settings.dimensions = Field_Dimensions::Single_Field_Dimensions;
 }
 
 void MainWindow::on_actionVisionFull_Field_triggered() {
-    _processor->changeVisionChannel(SharedVisionPortSinglePrimary);
-    _processor->setFieldDimensions(Field_Dimensions::Double_Field_Dimensions);
+    _settings.visionChannel = SharedVisionPort;
+    _settings.dimensions = Field_Dimensions::Double_Field_Dimensions;
 }
 
 bool MainWindow::live() { return !_playbackRate; }

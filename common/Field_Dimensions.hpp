@@ -44,7 +44,7 @@ struct Field_Dimensions {
     float FloorWidth() const { return _FloorWidth; }
 
     Geometry2d::Point CenterPoint() const { return _CenterPoint; }
-    
+
     Geometry2d::Rect OurGoalZoneShape() const {
         return _OurGoalZoneShape;
     }
@@ -68,7 +68,7 @@ struct Field_Dimensions {
     Geometry2d::Rect OurHalf() const { return _OurHalf; }
     Geometry2d::Rect TheirHalf() const { return _TheirHalf; }
     Geometry2d::Rect FieldRect() const { return _FieldRect; }
-    
+
     /*
     * Provides a rect that is a padded version of our goalbox
     * used mostly for movement at the play level
@@ -79,6 +79,19 @@ struct Field_Dimensions {
       tmp.pad(padding);
       return tmp;
     };
+
+    /**
+     * Make a world-to-team transformation for these field dimensions.
+     */
+    Geometry2d::TransformMatrix WorldToTeam(bool defendPlusX) {
+        double teamAngle = defendPlusX ? -M_PI_2 : M_PI_2;
+
+        Geometry2d::TransformMatrix worldToTeam =
+            Geometry2d::TransformMatrix::translate(0, Length() / 2.0f);
+        worldToTeam *= Geometry2d::TransformMatrix::rotate(teamAngle);
+
+        return worldToTeam;
+    }
 
     std::vector<Geometry2d::Line> FieldBorders() const { return _FieldBorders; }
 

@@ -52,12 +52,12 @@ class MultiRobotPathPlanner;
  * - radio IO (see Radio)
  * - running the BallTracker
  * - running the Gameplay::GameplayModule
- * - running the Loggercout 
+ * - running the Loggercout
  * - handling the Configuration
  * - handling the Joystick
  * - running motion control for each robot (see OurRobot#motionControl)
  */
-class Processor : public QThread {
+class Processor {
 public:
     struct Status {
         Status() {}
@@ -68,153 +68,137 @@ public:
         RJ::Time lastRadioRxTime;
     };
 
-    enum VisionChannel { primary, secondary, full };
-
     static void createConfiguration(Configuration* cfg);
 
-    Processor(bool sim, bool defendPlus, VisionChannel visionChannel,
+    Processor(bool sim, bool defendPlus,
               bool blueTeam, std::string readLogFile);
     virtual ~Processor();
 
+    /**
+     * Stop the execution of Processor, from another thread.
+     */
     void stop();
 
-    bool autonomous();
-    bool joystickValid() const;
-
+    // Joystick control
     JoystickControlValues getJoystickControlValue(Joystick& joy);
     std::vector<JoystickControlValues> getJoystickControlValues();
-
-    void externalReferee(bool value) {
-        _refereeModule->useExternalReferee(value);
-    }
-
-    bool externalReferee() const {
-        return _refereeModule->useExternalReferee();
-    }
-
-    void manualID(int value);
-    int manualID() const { return _context.game_settings.manualID; }
-
-    void multipleManual(bool value);
-    bool multipleManual() const {
-        return _context.game_settings.multipleManual;
-    }
-
-    bool useFieldOrientedManualDrive() const {
-        return _context.game_settings.useFieldOrientedManualDrive;
-    }
-    void setUseFieldOrientedManualDrive(bool foc) {
-        _context.game_settings.useFieldOrientedManualDrive = foc;
-    }
-
-    /**
-     * @brief Set the shell ID of the goalie
-     * @details The rules require us to specify at the start of a match/period
-     * which
-     * robot will be the goalie.  A value of -1 indicates that there is no one
-     * assigned.
-     */
-    void goalieID(int value);
-    /**
-     * @brief Shell ID of the goalie robot
-     */
-    int goalieID();
-
-    void dampedRotation(bool value);
-    void dampedTranslation(bool value);
-    void blueTeam(bool value);
-    void joystickKickOnBreakBeam(bool value);
-    void setupJoysticks();
     std::vector<int> getJoystickRobotIds();
 
+    // Module/Context getters
+    // These should not exist, and are temporary hacks to expose functionality
+    // that is not yet supported by Context
     std::shared_ptr<Gameplay::GameplayModule> gameplayModule() const {
         return _gameplayModule;
     }
-
     std::shared_ptr<Referee> refereeModule() const { return _refereeModule; }
-
     SystemState* state() { return &_context.state; }
-
-    bool simulation() const { return _context.game_settings.simulation; }
+    const Logger& logger() const { return _logger; }
+    Radio* radio() { return _radio->getRadio(); }
 
     Status status() {
         QMutexLocker lock(&_statusMutex);
         return _status;
     }
 
-    float framerate() { return _context.game_settings.framerate; }
-
-    const Logger& logger() const { return _logger; }
-
+    /**
+     * Open the given log filename
+     * @param filename
+     * @return true if it was successfully opened.
+     */
     bool openLog(const QString& filename) { return _logger.open(filename); }
 
-    VisionChannel visionChannel() { return _visionChannel; }
-
+    /**
+     * Close the file descriptor associated with the current log file, if one
+     * exists.
+     */
     void closeLog() { _logger.close(); }
 
-    QMutex& loopMutex() { return _loopMutex; }
-
-    Radio* radio() { return _radio->getRadio(); }
-
-    void recalculateWorldToTeamTransform();
-
-    void setFieldDimensions(const Field_Dimensions& dims);
-
-    bool isRadioOpen() const;
-
-    bool isInitialized() const;
-
-    void changeVisionChannel(int port);
-    ////////
+    /**
+     * @return a mutex controlling access to the Context struct.
+     *  Holding this mutex prevents Processor's loop from running.
+     */
+    QMutex* loopMutex() { return &_loopMutex; }
 
     // Time of the first LogFrame
     std::optional<RJ::Time> firstLogTime;
 
     Context* context() { return &_context; }
 
-protected:
-    void run() override;
+    /**
+     * @return Whether the system is initialized.
+     */
+    bool isInitialized() const;
 
-    void applyJoystickControls(const JoystickControlValues& controlVals,
-                               OurRobot* robot);
+    void run();
 
 private:
+    /**
+     * Recalculate the world-to-team transform. This should be run whenever
+     * defendPlusX is changed.
+     */
+    void recalculateWorldToTeamTransform(const Field_Dimensions& field_dims,
+                                         double field_angle);
+
     // Configuration for the robot.
     // TODO(Kyle): Add back in configuration values for different years.
     static std::unique_ptr<RobotConfig> robot_config_init;
 
-    // per-robot status configs
-    static std::vector<RobotStatus*> robotStatuses;
+    /**
+     * Apply the specified joystick control values to a robot.
+     */
+    void applyJoystickControls(const JoystickControlValues& controlVals,
+                               OurRobot* robot);
 
-    /** send out the radio data for the radio program */
+    /**
+     * Whether or not there exists a valid joystick.
+     */
+    bool joystickValid() const;
+
+    /**
+     * Send out the radio data for the radio program
+     */
     void sendRadioData();
 
-    void updateGeometryPacket(const SSL_GeometryFieldSize& fieldSize);
-
+    /**
+     * Run the vision models against our backlog of camera frames.
+     */
     void runModels();
 
-    /** Used to start and stop the thread **/
-    volatile bool _running;
+    // Helpers for dealing with change conditions (i.e. triggering a resize when
+    // field dimensions change)
+
+    /**
+     * Update field dimensions, if the value in Context has changed.
+     */
+    void updateFieldDimensions(const Field_Dimensions& dims);
+    Field_Dimensions _last_dimensions;
+    void setFieldDimensions(const Field_Dimensions& dims);
+
+    /**
+     * Update the orientation, if it has changed.
+     */
+    void updateOrientation(bool defendPlusX);
+    bool _last_defend_plus_x;
+    double _teamAngle;
+
+    /**
+     * Used to start and stop the thread
+     */
+    std::atomic_bool _running;
 
     Logger _logger;
 
-    // A logfile to read from.
-    // When empty, don't read logs at all.
-    std::string _readLogFile;
-
-    // Locked when processing loop stuff is happening (not when blocked for
-    // timing or I/O). This is public so the GUI thread can lock it to access
-    // SystemState, etc.
+    /**
+     * Locked when processing loop stuff is happening (not when blocked for
+     * timing or I/O). This is public so the GUI thread can lock it to access
+     * fields in Context.
+     */
     QMutex _loopMutex;
 
-    /** global system state */
+    /**
+     * Global system state.
+     */
     Context _context;
-
-    // Transformation from world space to team space.
-    // This depends on which goal we're defending.
-    Geometry2d::TransformMatrix _worldToTeam;
-
-    bool _defendPlus;
 
     // Processing period in microseconds
     RJ::Seconds _framePeriod = RJ::Seconds(1) / 60;
@@ -238,6 +222,4 @@ private:
 
     // joystick control
     std::vector<Joystick*> _joysticks;
-
-    VisionChannel _visionChannel;
 };

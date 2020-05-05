@@ -83,7 +83,7 @@ void Referee::receivePacket(const boost::system::error_code& error,
         return;
     }
 
-    if (!_useExternalRef) {
+    if (!_context->game_settings.allowExternalReferee) {
         return;
     }
 
@@ -161,8 +161,6 @@ void Referee::run() {
     update();
 }
 
-void Referee::overrideTeam(bool isBlue) { _game_state.blueTeam = isBlue; }
-
 void Referee::spinKickWatcher(const SystemState& system_state) {
     /// Only run the kick detector when the ball is visible
     if (!system_state.ball.valid) {
@@ -214,6 +212,11 @@ void Referee::spinKickWatcher(const SystemState& system_state) {
 void Referee::update() {
     _game_state = updateGameState(command_);
     _context->game_state = _game_state;
+
+    _context->using_external_referee = _isRefControlled;
+    if (!_isRefControlled) {
+        _context->game_state.blueTeam = _context->game_settings.requestedBlueTeam;
+    }
 
     switch (command_) {
         case Command::NORMAL_START:
@@ -392,5 +395,5 @@ GameState Referee::updateGameState(Command command) const {
                      their_info,
                      blue_team,
                      ball_placement_point,
-                     _game_state.defendPlusX};
+                     _context->game_settings.defendPlusX};
 }

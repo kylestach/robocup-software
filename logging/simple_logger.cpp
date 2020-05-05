@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
             }
         }
     } else {
-        if (!visionSocket.bind(SharedVisionPortDoubleNew,
+        if (!visionSocket.bind(SharedVisionPort,
                                QUdpSocket::ShareAddress)) {
             printf("Can't bind to shared vision port");
             return 1;
