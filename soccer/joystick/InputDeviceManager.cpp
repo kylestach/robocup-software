@@ -22,14 +22,14 @@ void InputDeviceManager::setupInputDevices(
         cerr << "ERROR: SDL could not initialize game controller! SDL "
             "Error: " << SDL_GetError() << endl;
     }
-    
+
     _manualID = -1;
     _multipleManual = false;
     _dampedTranslation = true;
     _dampedRotation = true;
 }
 
-void InputDeviceManager::update(Context* _context) {
+void InputDeviceManager::update() {
     // Pump sdl update for each type
     SDL_GameControllerUpdate();
 
@@ -76,7 +76,6 @@ void InputDeviceManager::update(Context* _context) {
 
     // Apply input device updates to robots
     applyInputDeviceControls(_context->robot_intents, _context->is_joystick_controlled);
-
 }
 
 bool InputDeviceManager::joystickValid() const {

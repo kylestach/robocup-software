@@ -35,7 +35,7 @@ public:
 
   void attachVirtual();
 
-  void update(Context* _context);
+  void update();
 
   bool joystickValid() const;
 
